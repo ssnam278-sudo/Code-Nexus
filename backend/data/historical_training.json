@@ -1,0 +1,16 @@
+[
+  {"rainfall": 7.4, "accumulated": 42, "moisture": 29, "slope": 38, "susceptibility": 34, "history": 25, "exposure": 32, "risk_level": "Monitoring"},
+  {"rainfall": 11.2, "accumulated": 67, "moisture": 39, "slope": 43, "susceptibility": 42, "history": 35, "exposure": 51, "risk_level": "Monitoring"},
+  {"rainfall": 13.1, "accumulated": 74, "moisture": 43, "slope": 51, "susceptibility": 45, "history": 38, "exposure": 44, "risk_level": "Monitoring"},
+  {"rainfall": 14.6, "accumulated": 81, "moisture": 46, "slope": 48, "susceptibility": 47, "history": 31, "exposure": 58, "risk_level": "Advisory"},
+  {"rainfall": 18.4, "accumulated": 96, "moisture": 51, "slope": 55, "susceptibility": 59, "history": 48, "exposure": 63, "risk_level": "Advisory"},
+  {"rainfall": 19.8, "accumulated": 108, "moisture": 55, "slope": 58, "susceptibility": 61, "history": 45, "exposure": 57, "risk_level": "Advisory"},
+  {"rainfall": 22.7, "accumulated": 119, "moisture": 58, "slope": 64, "susceptibility": 68, "history": 52, "exposure": 61, "risk_level": "High"},
+  {"rainfall": 27.4, "accumulated": 128, "moisture": 61, "slope": 66, "susceptibility": 70, "history": 59, "exposure": 67, "risk_level": "High"},
+  {"rainfall": 29.8, "accumulated": 138, "moisture": 64, "slope": 61, "susceptibility": 64, "history": 54, "exposure": 72, "risk_level": "High"},
+  {"rainfall": 34.2, "accumulated": 152, "moisture": 68, "slope": 69, "susceptibility": 74, "history": 63, "exposure": 75, "risk_level": "High"},
+  {"rainfall": 38.5, "accumulated": 170, "moisture": 73, "slope": 71, "susceptibility": 79, "history": 66, "exposure": 81, "risk_level": "Critical"},
+  {"rainfall": 42.6, "accumulated": 184, "moisture": 76, "slope": 72, "susceptibility": 82, "history": 68, "exposure": 86, "risk_level": "Critical"},
+  {"rainfall": 49.0, "accumulated": 224, "moisture": 84, "slope": 78, "susceptibility": 88, "history": 74, "exposure": 91, "risk_level": "Critical"},
+  {"rainfall": 55.0, "accumulated": 265, "moisture": 91, "slope": 84, "susceptibility": 94, "history": 82, "exposure": 96, "risk_level": "Critical"}
+]
