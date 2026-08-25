@@ -1,0 +1,10 @@
+[
+	{"id":"tawang-rain-01","zone_id":"tawang","rainfall":42.6,"soil_moisture":76,"temperature":19.4,"accumulated_rainfall":184,"status":"healthy","recorded_at":"2026-08-25T14:32:06+00:00"},
+	{"id":"siang-rain-01","zone_id":"siang","rainfall":29.8,"soil_moisture":64,"temperature":22.1,"accumulated_rainfall":138,"status":"healthy","recorded_at":"2026-08-25T14:32:04+00:00"},
+	{"id":"chura-rain-01","zone_id":"chura","rainfall":18.4,"soil_moisture":51,"temperature":24.7,"accumulated_rainfall":96,"status":"healthy","recorded_at":"2026-08-25T14:32:02+00:00"},
+	{"id":"garo-rain-01","zone_id":"garo","rainfall":11.2,"soil_moisture":39,"temperature":25.8,"accumulated_rainfall":67,"status":"healthy","recorded_at":"2026-08-25T14:32:01+00:00"},
+	{"id":"bomdila-rain-01","zone_id":"bomdila","rainfall":7.4,"soil_moisture":29,"temperature":14.8,"accumulated_rainfall":42,"status":"healthy","recorded_at":"2026-08-25T14:31:59+00:00"},
+	{"id":"ziro-rain-01","zone_id":"ziro","rainfall":14.6,"soil_moisture":46,"temperature":20.6,"accumulated_rainfall":81,"status":"healthy","recorded_at":"2026-08-25T14:31:58+00:00"},
+	{"id":"roing-rain-01","zone_id":"roing","rainfall":22.7,"soil_moisture":58,"temperature":21.2,"accumulated_rainfall":119,"status":"healthy","recorded_at":"2026-08-25T14:31:57+00:00"},
+	{"id":"ukhrul-rain-01","zone_id":"ukhrul","rainfall":13.1,"soil_moisture":43,"temperature":22.8,"accumulated_rainfall":74,"status":"healthy","recorded_at":"2026-08-25T14:31:56+00:00"}
+]

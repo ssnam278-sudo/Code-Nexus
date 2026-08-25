@@ -1,0 +1,8 @@
+[
+	{"id":"hist-001","zone_id":"tawang","date":"2024-07-12","severity":"High","rainfall_mm":168,"description":"Slope failure reported along the corridor after prolonged monsoon rainfall."},
+	{"id":"hist-002","zone_id":"siang","date":"2023-08-04","severity":"Advisory","rainfall_mm":121,"description":"Localized debris flow temporarily restricted valley access."},
+	{"id":"hist-003","zone_id":"chura","date":"2022-06-28","severity":"High","rainfall_mm":143,"description":"Roadside slope movement observed near a ridge settlement."},
+	{"id":"hist-004","zone_id":"garo","date":"2021-07-19","severity":"Advisory","rainfall_mm":104,"description":"Small earth slide cleared from a local access road."},
+	{"id":"hist-005","zone_id":"roing","date":"2024-06-22","severity":"High","rainfall_mm":151,"description":"Rockfall and soil movement recorded on a foothill route."},
+	{"id":"hist-006","zone_id":"ukhrul","date":"2023-07-16","severity":"Advisory","rainfall_mm":97,"description":"Minor drainage failure reported after a heavy rainfall event."}
+]
