@@ -114,6 +114,16 @@ class DataStore:
 				);
 				"""
 			)
+			columns = {row[1] for row in connection.execute("PRAGMA table_info(field_reports)")}
+			for column, definition in {
+				"latitude": "REAL",
+				"longitude": "REAL",
+				"accuracy_m": "REAL",
+				"media_type": "TEXT",
+				"media_name": "TEXT",
+			}.items():
+				if column not in columns:
+					connection.execute(f"ALTER TABLE field_reports ADD COLUMN {column} {definition}")
 
 	@staticmethod
 	def timestamp() -> str:
@@ -121,8 +131,15 @@ class DataStore:
 
 	def save_field_report(self, report: Mapping[str, Any]) -> int:
 		with self.connection() as connection:
-			cursor = connection.execute("INSERT INTO field_reports (zone_id, location, observation, severity, timestamp, evidence_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (report["zone_id"], report["location"], report["observation"], report["severity"], report.get("timestamp", self.timestamp()), report.get("evidence_path"), report.get("status", "Submitted"), self.timestamp()))
+			cursor = connection.execute("INSERT INTO field_reports (zone_id, location, observation, severity, timestamp, evidence_path, status, created_at, latitude, longitude, accuracy_m, media_type, media_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (report["zone_id"], report["location"], report["observation"], report["severity"], report.get("timestamp", self.timestamp()), report.get("evidence_path"), report.get("status", "Submitted"), self.timestamp(), report.get("latitude"), report.get("longitude"), report.get("accuracy_m"), report.get("media_type"), report.get("media_name")))
 			return int(cursor.lastrowid)
+
+	def update_field_report_status(self, report_id: int, status: str) -> bool:
+		if status not in {"Submitted", "Under review", "Verified", "Rejected"}:
+			raise ValueError("invalid report status")
+		with self.connection() as connection:
+			cursor = connection.execute("UPDATE field_reports SET status = ? WHERE id = ?", (status, report_id))
+			return cursor.rowcount == 1
 
 	def save_alert(self, alert: Mapping[str, Any]) -> int:
 		with self.connection() as connection:
