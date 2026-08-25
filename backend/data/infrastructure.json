@@ -1,0 +1,12 @@
+[
+	{"id":"asset-001","zone_id":"tawang","type":"road","name":"Tawang-Bomdila Highway","criticality":"High","population_served":4200,"status":"Open"},
+	{"id":"asset-002","zone_id":"tawang","type":"village","name":"Jang Village","criticality":"High","population_served":1800,"status":"Exposed"},
+	{"id":"asset-003","zone_id":"siang","type":"bridge","name":"Siang River Bridge","criticality":"Critical","population_served":5600,"status":"Open"},
+	{"id":"asset-004","zone_id":"siang","type":"road","name":"Pasighat-Yingkiong Road","criticality":"High","population_served":3100,"status":"Open"},
+	{"id":"asset-005","zone_id":"chura","type":"village","name":"Tuibong Settlement","criticality":"High","population_served":2400,"status":"Exposed"},
+	{"id":"asset-006","zone_id":"chura","type":"road","name":"Churachandpur Ridge Road","criticality":"High","population_served":1900,"status":"Open"},
+	{"id":"asset-007","zone_id":"garo","type":"road","name":"Baghmara-Mahadeo Road","criticality":"Moderate","population_served":1200,"status":"Open"},
+	{"id":"asset-008","zone_id":"roing","type":"bridge","name":"Dibang Access Bridge","criticality":"Critical","population_served":2700,"status":"Open"},
+	{"id":"asset-009","zone_id":"ukhrul","type":"village","name":"Hundung Village","criticality":"Moderate","population_served":980,"status":"Open"},
+	{"id":"asset-010","zone_id":"ziro","type":"road","name":"Ziro-Hapoli Road","criticality":"Moderate","population_served":1600,"status":"Open"}
+]
