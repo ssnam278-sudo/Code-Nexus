@@ -1,0 +1,7 @@
+const MapView = (() => {
+	let selectZone;
+	function init(selectCallback) { selectZone = selectCallback; document.querySelectorAll('.map-control').forEach(button => button.addEventListener('click', () => { document.querySelectorAll('.map-control').forEach(item => item.classList.remove('active')); button.classList.add('active'); renderMode(button.dataset.mapMode); })); }
+	function render(state) { const map = document.getElementById('risk-map'); map.querySelectorAll('.map-zone,.map-asset').forEach(item => item.remove()); const positions = { tawang:['20%','24%'], siang:['55%','33%'], chura:['50%','64%'], garo:['74%','68%'] }; state.zones.forEach(zone => { const node = document.createElement('button'); node.className = `map-zone ${zone.level.toLowerCase()} ${zone.id === state.selectedZoneId ? 'selected' : ''}`; node.style.left = positions[zone.id][0]; node.style.top = positions[zone.id][1]; node.dataset.zone = zone.id; node.innerHTML = `<span class="map-zone-label">${zone.name.split(' ')[0]}<small>${zone.score}</small></span>`; node.addEventListener('click', () => selectZone(zone.id)); map.appendChild(node); if (zone.score >= 50) { const asset = document.createElement('span'); asset.className = 'map-asset village'; asset.style.left = `calc(${positions[zone.id][0]} + 58px)`; asset.style.top = `calc(${positions[zone.id][1]} + 22px)`; asset.textContent = '◆'; map.appendChild(asset); } }); }
+	function renderMode(mode) { const map = document.getElementById('risk-map'); map.dataset.mode = mode; }
+	return { init, render };
+})();
