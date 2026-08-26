@@ -9,6 +9,12 @@ The repository currently contains two complementary implementations:
 
 The prototype uses local and simulated inputs. It is not a live warning service and must not be used as the sole basis for evacuation, route closure, or emergency response decisions.
 
+## Real-time ingestion
+
+The API supports production integration through `POST /api/ingest/telemetry`. Send `zone_id`, `sensor_id`, `rainfall`, `soil_moisture`, `temperature`, and `accumulated_rainfall` as JSON. The latest value is persisted in SQLite and broadcast to connected dashboards through `GET /api/events` using Server-Sent Events. Set `INGEST_API_KEY` and send it as `X-Ingest-Key` before exposing ingestion outside a trusted network. The browser keeps a polling fallback if the stream disconnects.
+
+This is a real-time transport and ingestion foundation, not a live environmental feed by itself. A provider adapter still needs to authenticate with IMD, GPM/CHIRPS, Sentinel, local stations, or another reviewed source and post validated readings to the ingestion endpoint. Use a production WSGI server, HTTPS, a managed database, durable event broker, rate limiting, monitoring, and proper authentication before operational deployment.
+
 ## Features
 
 ### Situation room
@@ -141,7 +147,7 @@ Accepted simulator scenarios are `Normal`, `Heavy Rain`, `Extreme Rain`, and `Re
 
 ## Current status and next steps
 
-This is a prototype rather than a production monitoring system. The browser dashboard currently uses its own in-memory mock data, while the Python engine is a separate library and is not connected to the dashboard. Authentication and protected API foundations are present, but the repository does not yet include durable operational data persistence, live sensor ingestion, or production alert delivery.
+This is a prototype rather than a production monitoring system. Local JSON and SQLite data are API-ready, while external IMD, GPM/CHIRPS, Sentinel, DEM, and soil-moisture connectors are explicitly marked as placeholders. The dashboard runs in demo mode locally; live ingestion and production alert delivery still require provider credentials and operational review.
 
 Natural next steps are to connect the dashboard to an API backed by `risk_engine.py`, populate the data contracts in `backend/data/`, add durable report storage, and integrate validated environmental, terrain, historical, and exposure feeds.
 
@@ -157,7 +163,7 @@ Create a project at [supabase.com](https://supabase.com), then open **Project Se
 window.BHUSANKET_CONFIG = {
 	supabaseUrl: 'https://your-project.supabase.co',
 	supabaseAnonKey: 'your-public-anon-key',
-	apiBaseUrl: 'http://localhost:8001'
+	apiBaseUrl: 'http://localhost:5000'
 };
 ```
 

@@ -112,6 +112,16 @@ class DataStore:
 					confidence REAL NOT NULL,
 					recorded_at TEXT NOT NULL
 				);
+				CREATE TABLE IF NOT EXISTS current_sensors (
+					zone_id TEXT PRIMARY KEY,
+					sensor_id TEXT NOT NULL,
+					rainfall REAL NOT NULL,
+					soil_moisture REAL NOT NULL,
+					temperature REAL NOT NULL,
+					accumulated_rainfall REAL NOT NULL,
+					status TEXT NOT NULL,
+					recorded_at TEXT NOT NULL
+				);
 				"""
 			)
 			columns = {row[1] for row in connection.execute("PRAGMA table_info(field_reports)")}
@@ -150,6 +160,20 @@ class DataStore:
 		with self.connection() as connection:
 			cursor = connection.execute("INSERT INTO sensor_updates (zone_id, rainfall, soil_moisture, temperature, accumulated_rainfall, recorded_at) VALUES (?, ?, ?, ?, ?, ?)", (update["zone_id"], update["rainfall"], update["soil_moisture"], update["temperature"], update["accumulated_rainfall"], update.get("recorded_at", self.timestamp())))
 			return int(cursor.lastrowid)
+
+	def upsert_current_sensor(self, reading: Mapping[str, Any]) -> None:
+		with self.connection() as connection:
+			connection.execute("INSERT INTO current_sensors (zone_id, sensor_id, rainfall, soil_moisture, temperature, accumulated_rainfall, status, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(zone_id) DO UPDATE SET sensor_id=excluded.sensor_id, rainfall=excluded.rainfall, soil_moisture=excluded.soil_moisture, temperature=excluded.temperature, accumulated_rainfall=excluded.accumulated_rainfall, status=excluded.status, recorded_at=excluded.recorded_at", (reading["zone_id"], reading["sensor_id"], reading["rainfall"], reading["soil_moisture"], reading["temperature"], reading["accumulated_rainfall"], reading.get("status", "healthy"), reading.get("recorded_at", self.timestamp())))
+
+	def current_sensors(self) -> dict[str, dict[str, Any]]:
+		with self.connection() as connection:
+			rows = connection.execute("SELECT * FROM current_sensors").fetchall()
+		readings = {}
+		for row in rows:
+			reading = dict(row)
+			reading["id"] = reading["sensor_id"]
+			readings[row["zone_id"]] = reading
+		return readings
 
 	def save_simulation_event(self, event: Mapping[str, Any]) -> int:
 		with self.connection() as connection:

@@ -3,19 +3,28 @@
 from __future__ import annotations
 
 import math
+import os
+import time
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, request, send_from_directory
 
 from .alerts import ALERT_STATES, build_alert, priority_queue
+from .data_connectors import source_register
+from .ml_model import compare_risk
+from .open_meteo import fetch_current
+from .realtime import publish, stream, subscribe, unsubscribe
 from .simulator import DataStore, SCENARIO_BOOSTS, simulate_zone
+from .thresholds import operational_level, threshold_for
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
 store = DataStore()
+_open_meteo_last_sync = 0.0
+_open_meteo_sync_seconds = float(os.getenv("OPEN_METEO_SYNC_SECONDS", "600"))
 
 app = Flask(
     __name__,
@@ -27,6 +36,7 @@ app.config.from_mapping(
     JSON_SORT_KEYS=False,
     MAX_CONTENT_LENGTH=10 * 1024 * 1024,
     ENVIRONMENT="prototype",
+    INGEST_API_KEY=os.getenv("INGEST_API_KEY", ""),
 )
 
 
@@ -46,6 +56,7 @@ def _zone_records() -> list[dict[str, Any]]:
         sensor["zone_id"]: sensor
         for sensor in datasets["sensors"]
     }
+    sensors.update(store.current_sensors())
 
     records = []
 
@@ -97,6 +108,7 @@ def _risk_record(
 
     return {
         "zone_id": zone["id"],
+        "operational_level": operational_level(result["risk_score"], zone.get("district")),
         **result,
     }
 
@@ -330,9 +342,29 @@ def zones() -> Any:
 
 @app.get("/api/sensors")
 def sensors() -> Any:
-    return jsonify(
-        store.load_dataset("sensors")
-    )
+    readings = {sensor["zone_id"]: sensor for sensor in store.load_dataset("sensors")}
+    readings.update(store.current_sensors())
+    return jsonify(list(readings.values()))
+
+
+@app.post("/api/live/open-meteo")
+def sync_open_meteo() -> Any:
+    global _open_meteo_last_sync
+    force = request.args.get("force", "false").lower() == "true"
+    if not force and time.monotonic() - _open_meteo_last_sync < _open_meteo_sync_seconds:
+        return jsonify({"status": "cached", "provider": "Open-Meteo", "next_sync_seconds": round(_open_meteo_sync_seconds - (time.monotonic() - _open_meteo_last_sync))})
+    readings = []
+    for zone in _zone_records():
+        try:
+            reading = fetch_current(zone)
+            store.upsert_current_sensor(reading)
+            store.save_sensor_update(reading)
+            publish("telemetry", reading)
+            readings.append(reading)
+        except (KeyError, TypeError, ValueError, OSError) as error:
+            return jsonify({"error": "Open-Meteo sync failed", "detail": str(error), "completed": len(readings)}), 502
+    _open_meteo_last_sync = time.monotonic()
+    return jsonify({"status": "updated", "provider": "Open-Meteo", "readings": readings, "recorded_at": store.timestamp()})
 
 
 @app.get("/api/history")
@@ -347,6 +379,26 @@ def infrastructure() -> Any:
     return jsonify(
         store.load_dataset("infrastructure")
     )
+
+
+@app.get("/api/sources")
+def sources() -> Any:
+    return jsonify(source_register())
+
+
+@app.get("/api/thresholds")
+def thresholds() -> Any:
+    return jsonify({"levels": ["Normal", "Watch", "Advisory", "Warning", "Critical", "Evacuation Recommended"], "districts": {"default": threshold_for()}})
+
+
+@app.post("/api/ml/compare")
+def ml_compare() -> Any:
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = compare_risk(payload)
+    except (KeyError, TypeError, ValueError) as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(result)
 
 
 @app.get("/api/exposure")
@@ -700,6 +752,38 @@ def update_report(
             "status": status,
         }
     )
+
+
+@app.get("/api/events")
+def events() -> Any:
+    queue = subscribe()
+    response = app.response_class(stream(queue), mimetype="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
+
+
+@app.post("/api/ingest/telemetry")
+def ingest_telemetry() -> Any:
+    configured_key = app.config["INGEST_API_KEY"]
+    if configured_key and request.headers.get("X-Ingest-Key") != configured_key:
+        return jsonify({"error": "invalid ingestion key"}), 401
+    payload = request.get_json(silent=True) or {}
+    required = ("zone_id", "sensor_id", "rainfall", "soil_moisture", "temperature", "accumulated_rainfall")
+    missing = [field for field in required if field not in payload]
+    if missing:
+        return jsonify({"error": "missing required fields", "fields": missing}), 400
+    try:
+        reading = {"zone_id": str(payload["zone_id"]), "sensor_id": str(payload["sensor_id"]), "rainfall": float(payload["rainfall"]), "soil_moisture": float(payload["soil_moisture"]), "temperature": float(payload["temperature"]), "accumulated_rainfall": float(payload["accumulated_rainfall"]), "status": str(payload.get("status", "healthy")), "recorded_at": str(payload.get("recorded_at", store.timestamp()))}
+        _find_zone(reading["zone_id"])
+        if reading["rainfall"] < 0 or reading["accumulated_rainfall"] < 0 or not 0 <= reading["soil_moisture"] <= 100:
+            raise ValueError("invalid telemetry range")
+    except (KeyError, TypeError, ValueError) as error:
+        return jsonify({"error": str(error)}), 400
+    store.upsert_current_sensor(reading)
+    store.save_sensor_update(reading)
+    publish("telemetry", reading)
+    return jsonify({"status": "accepted", "reading": reading}), 202
 
 
 if __name__ == "__main__":

@@ -45,5 +45,22 @@
 .auth-card { width:min(100%,1100px) !important; grid-template-columns:320px minmax(0,1fr) !important; }
 .auth-panel { width:100%; min-width:0; }
 .auth-link:disabled { opacity:.5; cursor:wait; }
+.ai-comparison { margin-top:15px; padding-bottom:14px; animation:rise .35s ease both; }
+.comparison-badge { padding:5px 7px; color:var(--green); border:1px solid #a8d3bf; background:#effaf3; font:600 9px 'Barlow Condensed'; letter-spacing:.7px; }
+.comparison-badge.review { color:var(--red); border-color:#e2b2aa; background:#fff1ee; }
+.comparison-scores { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 17px 9px; }
+.comparison-scores span { color:#77898d; font:10px 'Barlow Condensed'; letter-spacing:.8px; }
+.comparison-scores b { display:block; margin-top:4px; color:#294a52; font-size:15px; letter-spacing:0; }
+#ai-comparison-body > p { margin:0 17px 10px; color:#60747a; font-size:10px; line-height:1.45; }
+.ai-drivers { display:flex; flex-wrap:wrap; gap:5px; padding:0 17px; }
+.ai-drivers span { padding:5px 7px; color:#587177; background:#f2f8f7; border:1px solid #dbe9e7; font-size:9px; }
+.ai-drivers b { margin-left:5px; color:var(--orange); }
+.map-time-control { display:flex; align-items:center; gap:6px; margin-left:10px; color:#65797d; font:600 9px 'Barlow Condensed'; letter-spacing:.8px; white-space:nowrap; }
+.map-time-control select { padding:6px; border:1px solid #d5e3e1; border-radius:4px; color:#45636a; background:#fff; font-size:10px; }
+.risk-pulse { animation:marker-pulse 1.8s ease-in-out infinite; }
+.rainfall-ring { animation:ring-pulse 2.2s ease-in-out infinite; transform-origin:center; }
+@keyframes marker-pulse { 50% { filter:drop-shadow(0 0 7px rgba(211,108,54,.8)); } }
+@keyframes ring-pulse { 50% { opacity:.42; } }
+@media(max-width:760px) { .map-time-control { margin:10px 0 0; justify-content:space-between; } .map-time-control select { flex:1; } .comparison-scores { grid-template-columns:1fr; } }
 .auth-message { max-width:560px; line-height:1.45; }
 @media(max-width:700px) { .auth-card { display:block !important; width:100% !important; grid-template-columns:none !important; }.auth-story { display:none; } }

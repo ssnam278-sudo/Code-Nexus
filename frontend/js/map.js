@@ -1,25 +1,70 @@
 const MapView = (() => {
-	let map; let zoneLayer; let selectedMarker; let activeMode = 'risk'; let selectZone;
-	const layers = {};
-	function init(selectCallback) {
-		selectZone = selectCallback;
-		const element = document.getElementById('risk-map');
-		if (window.L) {
-			map = L.map(element, { zoomControl:false, attributionControl:true, minZoom:5, maxZoom:18, zoomSnap:.25, zoomDelta:.5, scrollWheelZoom:true, wheelDebounceTime:20, wheelPxPerZoomLevel:90, zoomAnimation:true, fadeAnimation:true, markerZoomAnimation:true, touchZoom:true, inertia:true, worldCopyJump:false }).setView([26.85, 93.7], 6);
-			L.control.zoom({ position:'bottomright' }).addTo(map);
-			layers.terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom:17, maxNativeZoom:17, tileSize:256, updateWhenZooming:false, updateWhenIdle:true, keepBuffer:4, attribution:'OpenTopoMap' });
-			layers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19, maxNativeZoom:19, tileSize:256, updateWhenZooming:false, updateWhenIdle:true, keepBuffer:4, attribution:'Esri World Imagery' });
-			layers.roads = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, maxNativeZoom:19, opacity:.42, updateWhenZooming:false, updateWhenIdle:true, keepBuffer:4, attribution:'OpenStreetMap' });
-			layers.satellite.addTo(map); layers.roads.addTo(map); zoneLayer = L.layerGroup().addTo(map);
-		}
-		document.querySelectorAll('.map-control').forEach(button => button.addEventListener('click', () => { document.querySelectorAll('.map-control').forEach(item => item.classList.remove('active')); button.classList.add('active'); activeMode = button.dataset.mapMode; renderMode(activeMode); }));
-		window.addEventListener('resize', resize);
-		document.addEventListener('bhusanket:authenticated', resize);
-	}
-	function resize() { if (!map) return; requestAnimationFrame(() => { map.invalidateSize({ animate:false, pan:false }); map.setView(map.getCenter(), map.getZoom(), { animate:false }); }); }
-	function color(zone) { return zone.level === 'Critical' ? '#d34438' : zone.level === 'High' ? '#d36c36' : zone.level === 'Advisory' ? '#d5a03b' : '#4d9d69'; }
-	function render(state) { const selected = state.zones.find(zone => zone.id === state.selectedZoneId) || state.zones[0]; document.getElementById('coordinates').textContent = `${selected.coordinates[0].toFixed(4)}° N, ${selected.coordinates[1].toFixed(4)}° E`; renderLocationSwitcher(state); if (!map) return; zoneLayer.clearLayers(); if (state.exposure && state.exposure.features) L.geoJSON(state.exposure, { style:feature => { const props = feature.properties || {}; const selectedFeature = props.zone_id === state.selectedZoneId; if (props.feature_type === 'zone_boundary') return { color:color(state.zones.find(zone => zone.id === props.zone_id) || selected), weight:selectedFeature ? 2 : 1, dashArray:'5 5', fill:false }; if (props.feature_type === 'probable_impact_area') return { color:color(state.zones.find(zone => zone.id === props.zone_id) || selected), weight:selectedFeature ? 3 : 1, dashArray:'7 6', fillColor:color(state.zones.find(zone => zone.id === props.zone_id) || selected), fillOpacity:selectedFeature ? .14 : .04 }; return {}; }, pointToLayer:(feature, latlng) => L.circleMarker(latlng, { radius:8, color:'#c87422', fillColor:'#f0a33c', fillOpacity:.9, weight:2 }), onEachFeature:(feature, layer) => { const props = feature.properties || {}; if (props.feature_type === 'probable_impact_area') layer.bindTooltip(`<strong>Probable impact area</strong><br>${props.name}<br>Estimated radius: ${props.radius_km} km<br><b>${props.assistance}</b>`, { className:'map-tooltip', sticky:true }); if (props.feature_type === 'hazard_source') layer.bindTooltip(`<strong>Potential landslide source</strong><br>${props.description}`, { className:'map-tooltip', sticky:true }); if (props.feature_type === 'infrastructure') layer.bindTooltip(`<strong>${props.name}</strong><br>${props.type} · ${props.criticality}<br>Status: ${props.status}`, { className:'map-tooltip', sticky:true }); } }).addTo(zoneLayer); state.zones.forEach(zone => { const isSelected = zone.id === state.selectedZoneId; const point = L.circleMarker(zone.coordinates, { radius:isSelected ? 10 : 6, color:color(zone), weight:isSelected ? 3 : 2, fillColor:color(zone), fillOpacity:isSelected ? .9 : .68, bubblingMouseEvents:false }); point.bindTooltip(`<strong>${zone.name}</strong><br>${zone.district}<br><b>${zone.score} / 100 · ${zone.level}</b><br><small>Click to monitor this zone</small>`, { direction:'top', className:'map-tooltip', sticky:true }); point.on('click', () => selectZone(zone.id)); point.addTo(zoneLayer); }); if (activeMode === 'rainfall') state.zones.forEach(zone => L.circle(zone.coordinates, { radius:zone.rainfall * 330, color:'#3e82a1', weight:1, fillColor:'#4e9ab9', fillOpacity:.2, interactive:false }).addTo(zoneLayer)); if (activeMode === 'roads') layers.roads.setOpacity(.9); if (activeMode !== 'roads') layers.roads.setOpacity(.35); if (selected.id !== map._selectedZone) { map.flyTo(selected.coordinates, map.getZoom() < 8 ? 10 : map.getZoom(), { duration:.85, easeLinearity:.15 }); map._selectedZone = selected.id; } }
-	function renderLocationSwitcher(state) { const switcher = document.getElementById('map-location-switcher'); if (!switcher) return; switcher.innerHTML = state.zones.map(zone => `<button class="map-place ${zone.id === state.selectedZoneId ? 'active' : ''}" data-map-zone="${zone.id}"><i class="place-dot" style="background:${color(zone)}"></i><span>${zone.name}</span><b>${zone.score}</b></button>`).join(''); switcher.querySelectorAll('[data-map-zone]').forEach(button => button.addEventListener('click', () => selectZone(button.dataset.mapZone))); }
-	function renderMode(mode) { const label = document.getElementById('active-layer'); if (label) label.textContent = `${mode.toUpperCase()} OVERLAY`; if (!map) return; if (mode === 'terrain') { map.removeLayer(layers.satellite); layers.terrain.addTo(map); } else { map.removeLayer(layers.terrain); layers.satellite.addTo(map); } }
-	return { init, render };
+    let map;
+    let zoneLayer;
+    let overlayLayer;
+    let selectZone;
+    let activeMode = 'risk';
+    const layers = {};
+    const color = zone => zone.level === 'Critical' ? '#d34438' : zone.level === 'High' ? '#d36c36' : zone.level === 'Advisory' ? '#d5a03b' : '#4d9d69';
+
+    function init(selectCallback) {
+        selectZone = selectCallback;
+        const element = document.getElementById('risk-map');
+        if (!window.L || !element) return;
+        map = L.map(element, { zoomControl:false, attributionControl:true, minZoom:5, maxZoom:18, zoomSnap:.25, scrollWheelZoom:true }).setView([26.85, 93.7], 6);
+        L.control.zoom({ position:'bottomright' }).addTo(map);
+        layers.terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom:17, attribution:'OpenTopoMap' });
+        layers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19, attribution:'Esri World Imagery' }).addTo(map);
+        layers.roads = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, opacity:.45, attribution:'OpenStreetMap' }).addTo(map);
+        zoneLayer = L.layerGroup().addTo(map);
+        overlayLayer = L.layerGroup().addTo(map);
+        document.querySelectorAll('.map-control').forEach(button => button.addEventListener('click', () => {
+            document.querySelectorAll('.map-control').forEach(item => item.classList.remove('active'));
+            button.classList.add('active');
+            activeMode = button.dataset.mapMode;
+            renderMode(activeMode);
+        }));
+        const head = element.closest('.map-shell')?.querySelector('.map-head');
+        if (head && !document.getElementById('map-time-range')) {
+            const control = document.createElement('label');
+            control.className = 'map-time-control';
+            control.innerHTML = 'TIME WINDOW <select id="map-time-range"><option value="24h">24 hours</option><option value="7d">7 days</option><option value="monsoon">Monsoon simulation</option></select>';
+            head.appendChild(control);
+            control.querySelector('select').addEventListener('change', event => { map._timeWindow = event.target.value; renderMode(activeMode); });
+        }
+        window.addEventListener('resize', resize);
+        document.addEventListener('bhusanket:authenticated', resize);
+    }
+
+    function resize() { if (map) requestAnimationFrame(() => map.invalidateSize({ animate:false })); }
+    function drawRainfall(zone, windowName) { const multiplier = windowName === 'monsoon' ? 1.55 : windowName === '7d' ? 1.2 : 1; const radius = Math.max(400, Math.min(2600, zone.rainfall * 28 * multiplier)); L.circle(zone.coordinates, { radius, color:'#e07b38', weight:2, dashArray:'6 7', fillColor:'#e07b38', fillOpacity:.11, className:'rainfall-ring' }).addTo(overlayLayer); }
+    function drawExposure(state) { (state.exposure?.features || []).filter(feature => feature.properties?.feature_type === 'infrastructure').forEach(feature => { const [longitude, latitude] = feature.geometry.coordinates; L.circleMarker([latitude, longitude], { radius:7, color:'#f0a33c', fillColor:'#fff4c2', fillOpacity:.95, weight:2 }).bindTooltip(feature.properties.name || 'Exposed asset').addTo(overlayLayer); }); }
+    function drawEvacuationRoutes(zone) { const [latitude, longitude] = zone.coordinates; L.polyline([[latitude - .06, longitude - .08], [latitude - .025, longitude - .025], [latitude, longitude]], { color:'#4b9f91', weight:4, dashArray:'10 8', opacity:.9 }).bindTooltip('Prototype evacuation route').addTo(overlayLayer); }
+
+    function render(state) {
+        const selected = state.zones.find(zone => zone.id === state.selectedZoneId) || state.zones[0];
+        if (!selected || !Array.isArray(selected.coordinates) || selected.coordinates.some(value => !Number.isFinite(value))) return;
+        document.getElementById('coordinates').textContent = `${selected.coordinates[0].toFixed(4)}° N, ${selected.coordinates[1].toFixed(4)}° E`;
+        renderLocationSwitcher(state);
+        if (!map) return;
+        zoneLayer.clearLayers();
+        overlayLayer.clearLayers();
+        (state.zones || []).filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length === 2 && zone.coordinates.every(Number.isFinite)).forEach(zone => {
+            const selectedZone = zone.id === state.selectedZoneId;
+            const marker = L.circleMarker(zone.coordinates, { radius:selectedZone ? 10 : 7, color:color(zone), fillColor:color(zone), fillOpacity:.9, weight:selectedZone ? 3 : 2, className: zone.level === 'Critical' || zone.level === 'High' ? 'risk-pulse' : '' });
+            marker.bindTooltip(`<strong>${zone.name}</strong><br>${zone.level} · Score ${zone.score}`);
+            marker.on('click', () => selectZone(zone.id));
+            marker.addTo(zoneLayer);
+        });
+        if (activeMode === 'rainfall') state.zones.filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length === 2 && zone.coordinates.every(Number.isFinite)).forEach(zone => drawRainfall(zone, map._timeWindow || '24h'));
+        if (activeMode === 'exposure') drawExposure(state);
+        if (activeMode === 'roads') drawEvacuationRoutes(selected);
+        if (activeMode === 'terrain') { map.removeLayer(layers.satellite); layers.terrain.addTo(map); } else { map.removeLayer(layers.terrain); layers.satellite.addTo(map); }
+        layers.roads.setOpacity(activeMode === 'roads' ? .9 : .35);
+        if (selected.id !== map._selectedZone) map._selectedZone = selected.id;
+    }
+
+    function renderLocationSwitcher(state) { const switcher = document.getElementById('map-location-switcher'); if (!switcher) return; switcher.innerHTML = state.zones.map(zone => `<button class="map-place ${zone.id === state.selectedZoneId ? 'active' : ''}" data-map-zone="${zone.id}"><i class="place-dot" style="background:${color(zone)}"></i><span>${zone.name}</span><b>${zone.score}</b></button>`).join(''); switcher.querySelectorAll('[data-map-zone]').forEach(button => button.addEventListener('click', () => selectZone(button.dataset.mapZone))); }
+    function renderMode(mode) { const label = document.getElementById('active-layer'); if (label) label.textContent = `${mode.toUpperCase()} OVERLAY`; if (window.AppState) render(window.AppState); }
+    return { init, render };
 })();

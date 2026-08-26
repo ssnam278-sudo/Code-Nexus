@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 
-ALERT_STATES = ("Monitoring", "Advisory", "High", "Critical")
+ALERT_STATES = ("Advisory", "High", "Critical")
 
 
 def alert_state(risk_score: int) -> str:
