@@ -6,9 +6,9 @@ situation room) is unchanged. Only deployment glue was added:
 | File | Purpose |
 | --- | --- |
 | `render.yaml` | One‑click Render blueprint (recommended – runs the whole app live) |
-| `vercel.json`, `api/index.py` | Run the Flask app as a Vercel Python function |
+| `pyproject.toml` | `[tool.vercel] entrypoint = "backend.app:app"` – Vercel serves the Flask WSGI app directly |
 | `backend/__init__.py` | Make `backend` an explicit package for serverless bundlers |
-| `CODENEXUS_DB` env var | Point SQLite at a writable path (`/tmp`) on read‑only hosts |
+| `CODENEXUS_DB` env var | Point SQLite at a writable path; the app auto‑uses `/tmp` when `VERCEL` is set |
 
 The dashboard auto‑detects its API: when served from the same origin as the API
 (Render / Vercel) it just works, with no `frontend/js/config.js` change needed.
@@ -36,18 +36,17 @@ gunicorn backend.app:app --bind 0.0.0.0:8000       # or: python -m backend.app
 
 ## Option B — Vercel  (deploy from this folder, no GitHub needed)
 
+**From the Vercel dashboard (recommended):** <https://vercel.com/new> → Import
+this repo → **Framework Preset: Other / Flask** → Deploy. `pyproject.toml` tells
+Vercel the entrypoint is `backend.app:app`; it installs `requirements.txt` and
+serves the Flask app (frontend + API). Redeploys on every push.
+
+**Or from this folder:**
+
 ```bash
-npx vercel login          # once, in your browser
-npx vercel --prod         # uploads this folder → https://<project>.vercel.app
+npx vercel login
+npx vercel --prod         # → https://<project>.vercel.app
 ```
-
-Accept every auto‑detected default. Vercel reads `vercel.json`, installs
-`requirements.txt`, and runs `backend/app.py` as a Python function
-(`api/index.py`). Redeploy any time with `npx vercel --prod`.
-
-**Alternative — from the Vercel dashboard:** push this repo to your GitHub, then
-<https://vercel.com/new> → Import → pick the repo → Deploy. It auto‑detects
-`vercel.json` and redeploys on every push.
 
 **Two serverless limitations** (the app handles both automatically):
 
@@ -84,4 +83,4 @@ For a live backend, pair this with Option A/B and set `apiBaseUrl` in
 | --- | --- | --- |
 | `OPEN_METEO_SYNC_SECONDS` | `600` | Min seconds between live weather pulls |
 | `INGEST_API_KEY` | *(unset)* | If set, `POST /api/ingest/telemetry` requires header `X-Ingest-Key` |
-| `CODENEXUS_DB` | `backend/code_nexus.db` | Set to `/tmp/code_nexus.db` on read‑only hosts (Vercel sets this automatically via `api/index.py`) |
+| `CODENEXUS_DB` | `backend/code_nexus.db` locally, `/tmp/code_nexus.db` when `VERCEL` is set | Override to use a specific path (e.g. a mounted volume) |

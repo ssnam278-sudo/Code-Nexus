@@ -23,11 +23,14 @@ SCENARIO_BOOSTS = {
 }
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
-# Hosts with a read-only project filesystem (Vercel, some container platforms)
-# can point the database at a writable path such as /tmp via CODENEXUS_DB.
+# Hosts with a read-only project filesystem (Vercel, AWS Lambda, some containers)
+# only allow writes under /tmp. Honour an explicit CODENEXUS_DB first, then fall
+# back to /tmp on those hosts, and finally to a file beside this module locally.
+_READ_ONLY_HOST = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 DEFAULT_DATABASE = Path(
 	os.getenv("CODENEXUS_DB")
-	or (Path(__file__).resolve().parent / "code_nexus.db")
+	or ("/tmp/code_nexus.db" if _READ_ONLY_HOST
+		else str(Path(__file__).resolve().parent / "code_nexus.db"))
 )
 
 

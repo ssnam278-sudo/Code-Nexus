@@ -1,0 +1,4 @@
+# Vercel's Python builder serves this WSGI app directly.
+# https://vercel.com/docs/frameworks/backend/flask
+[tool.vercel]
+entrypoint = "backend.app:app"
