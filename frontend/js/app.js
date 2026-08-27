@@ -13,7 +13,20 @@ const MockAPI = (() => {
 	return { zones:() => structuredClone(zones), reports:() => structuredClone(reports), addReport:report => { reports.unshift(report); return structuredClone(report); } };
 })();
 
-const configuredApiBase = (window.BHUSANKET_CONFIG?.apiBaseUrl || '').replace(/\/$/, '');
+function resolveApiBase() {
+	const configured = (window.CODENEXUS_CONFIG?.apiBaseUrl || '').replace(/\/$/, '');
+	if (!configured) return '';
+	try {
+		const url = new URL(configured, window.location.href);
+		const localTargets = ['localhost', '127.0.0.1', '0.0.0.0'];
+		const localPage = ['localhost', '127.0.0.1', ''].includes(window.location.hostname);
+		if (localTargets.includes(url.hostname) && !localPage) return window.location.origin;
+		return url.toString().replace(/\/$/, '');
+	} catch (error) {
+		return configured;
+	}
+}
+const configuredApiBase = resolveApiBase();
 const API_BASE = configuredApiBase || (window.location.protocol === 'file:' ? 'http://127.0.0.1:5000' : '');
 const ApiClient = {
 	async request(path, options) { const response = await fetch(`${API_BASE}${path}`, { headers:{ 'Content-Type':'application/json', ...(options && options.headers) }, ...options }); if (!response.ok) throw new Error(`API ${response.status}`); return response.json(); },
@@ -44,6 +57,7 @@ async function selectZone(id) { AppState.previousZones = AppState.zones.map(zone
 async function applyScenario(scenario) { const [rainfallBoost, moistureBoost] = SCENARIO_BOOSTS[scenario] || SCENARIO_BOOSTS.Normal; AppState.previousZones = AppState.zones.map(zone => ({ ...zone })); AppState.scenario = scenario; AppState.rainfallBoost = rainfallBoost; AppState.moistureBoost = moistureBoost; if (AppState.backendConnected) { try { const result = await ApiClient.simulation(scenario); AppState.zones = result.results.map(normalizeZone); AppState.riskHistory = await ApiClient.riskHistory(); AppState.alerts = (await ApiClient.alerts()).alerts || []; AppState.simulationEvents = (await ApiClient.simulationHistory()).events || []; renderState(); showToast(`${scenario} loaded from Flask risk engine.`); return; } catch (error) { AppState.backendConnected = false; } } AppState.zones = AppState.baseline.map(localRisk); renderState(); showToast(`${scenario} applied in offline prototype mode.`); }
 async function submitReport(report) { if (AppState.backendConnected) { try { await ApiClient.createReport(report); AppState.reports = (await ApiClient.reports()).map(normalizeReport); return; } catch (error) { AppState.backendConnected = false; } } MockAPI.addReport(report); AppState.reports = MockAPI.reports(); }
 function showToast(message) { const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 3000); }
-function connectRealtimeStream() { if (typeof EventSource === 'undefined') return; const source = new EventSource(`${API_BASE}/api/events`); source.addEventListener('telemetry', () => bootstrap()); source.onerror = () => { source.close(); setTimeout(connectRealtimeStream, 5000); }; }
+let realtimeFailures = 0;
+function connectRealtimeStream() { if (typeof EventSource === 'undefined') return; const source = new EventSource(`${API_BASE}/api/events`); source.onopen = () => { realtimeFailures = 0; }; source.addEventListener('telemetry', () => bootstrap()); source.onerror = () => { source.close(); realtimeFailures += 1; if (realtimeFailures <= 4) setTimeout(connectRealtimeStream, 5000); else console.info('Live event stream unavailable on this host; using periodic polling instead.'); }; }
 function switchView(view) { document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === view)); document.querySelectorAll('.view').forEach(item => item.classList.toggle('active', item.dataset.section === view)); if (view === 'intelligence') Dashboard.renderIntelligence(AppState); if (view === 'alerts') Dashboard.renderAlertsPage(AppState); if (view === 'reports') Dashboard.renderReports(AppState); }
 document.addEventListener('DOMContentLoaded', () => { Dashboard.init({ selectZone, applyScenario, switchView, showToast, submitReport, updateReport: async (id, status) => { await ApiClient.updateReport(id, status); AppState.reports = (await ApiClient.reports()).map(normalizeReport); renderState(); showToast(`Report marked ${status}.`); } }); MapView.init(selectZone); bootstrap(); connectRealtimeStream(); setInterval(() => { if (AppState.backendConnected) bootstrap(); else if (AppState.scenario === 'Normal') { AppState.baseline = AppState.baseline.map(zone => ({ ...zone, rainfall:Math.max(0, zone.rainfall + (Math.random() - .5) * .8), moisture:Math.max(0, zone.moisture + (Math.random() - .5) * .25) })); AppState.zones = AppState.baseline.map(localRisk); renderState(); } }, 7000); });

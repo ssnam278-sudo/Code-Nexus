@@ -1,6 +1,6 @@
-# BhuSanket
+# Code Nexus
 
-BhuSanket is a landslide intelligence prototype for monitoring environmental conditions, estimating zone-level risk, and prioritising field verification across the North Eastern Region of India.
+Code Nexus is a landslide intelligence prototype for monitoring environmental conditions, estimating zone-level risk, and prioritising field verification across the North Eastern Region of India.
 
 The repository currently contains two complementary implementations:
 
@@ -160,7 +160,7 @@ The authentication foundation uses Supabase Auth. It runs in demo mode while cre
 Create a project at [supabase.com](https://supabase.com), then open **Project Settings > API**. Copy the project URL and the public anon key into `frontend/js/config.js`:
 
 ```js
-window.BHUSANKET_CONFIG = {
+window.CODENEXUS_CONFIG = {
 	supabaseUrl: 'https://your-project.supabase.co',
 	supabaseAnonKey: 'your-public-anon-key',
 	apiBaseUrl: 'http://localhost:5000'

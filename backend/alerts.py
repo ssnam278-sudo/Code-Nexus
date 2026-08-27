@@ -1,4 +1,4 @@
-"""Alert state and response-priority rules for BhuSanket."""
+"""Alert state and response-priority rules for Code Nexus."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Small explainable ML comparison model for the BhuSanket prototype."""
+"""Small explainable ML comparison model for the Code Nexus prototype."""
 
 from __future__ import annotations
 

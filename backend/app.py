@@ -1,4 +1,4 @@
-"""Flask API for the BhuSanket prototype monitoring system."""
+"""Flask API for the Code Nexus prototype monitoring system."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from .alerts import ALERT_STATES, build_alert, priority_queue
 from .data_connectors import source_register
-from .ml_model import compare_risk
 from .open_meteo import fetch_current
 from .realtime import publish, stream, subscribe, unsubscribe
 from .simulator import DataStore, SCENARIO_BOOSTS, simulate_zone
@@ -325,7 +324,7 @@ def health() -> Any:
     return jsonify(
         {
             "status": "ok",
-            "service": "bhusanket-api",
+            "service": "code-nexus-api",
             "environment": app.config["ENVIRONMENT"],
             "data_sources": 4,
             "database": str(
@@ -395,7 +394,10 @@ def thresholds() -> Any:
 def ml_compare() -> Any:
     payload = request.get_json(silent=True) or {}
     try:
+        from .ml_model import compare_risk
         result = compare_risk(payload)
+    except ImportError:
+        return jsonify({"error": "ML comparison model is not available in this deployment"}), 503
     except (KeyError, TypeError, ValueError) as error:
         return jsonify({"error": str(error)}), 400
     return jsonify(result)

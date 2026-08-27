@@ -1,4 +1,4 @@
-"""Deterministic, explainable baseline risk engine for BhuSanket zones."""
+"""Deterministic, explainable baseline risk engine for Code Nexus zones."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def _explanation(level: str, factors: list[dict[str, Any]]) -> str:
 
 
 def calculate_risk(zone: Mapping[str, Any]) -> dict[str, Any]:
-	"""Calculate a deterministic risk result from an existing BhuSanket zone."""
+	"""Calculate a deterministic risk result from an existing Code Nexus zone."""
 	values = _validate_zone(zone)
 	normalized = {
 		"Current rainfall": min(100.0, values["rainfall"] / 60 * 100),

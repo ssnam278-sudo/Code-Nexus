@@ -33,7 +33,7 @@ const MapView = (() => {
             control.querySelector('select').addEventListener('change', event => { map._timeWindow = event.target.value; renderMode(activeMode); });
         }
         window.addEventListener('resize', resize);
-        document.addEventListener('bhusanket:authenticated', resize);
+        document.addEventListener('codenexus:authenticated', resize);
     }
 
     function resize() { if (map) requestAnimationFrame(() => map.invalidateSize({ animate:false })); }

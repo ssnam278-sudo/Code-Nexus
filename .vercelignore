@@ -1,0 +1,12 @@
+.git
+.venv
+venv
+tests
+**/__pycache__
+*.pyc
+*.db
+README.md
+LICENSE
+.env
+.env.example
+render.yaml

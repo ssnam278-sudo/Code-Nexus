@@ -1,8 +1,9 @@
-"""Scenario simulation and local data persistence for BhuSanket."""
+"""Scenario simulation and local data persistence for Code Nexus."""
 
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,7 +23,12 @@ SCENARIO_BOOSTS = {
 }
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
-DEFAULT_DATABASE = Path(__file__).resolve().parent / "bhusanket.db"
+# Hosts with a read-only project filesystem (Vercel, some container platforms)
+# can point the database at a writable path such as /tmp via CODENEXUS_DB.
+DEFAULT_DATABASE = Path(
+	os.getenv("CODENEXUS_DB")
+	or (Path(__file__).resolve().parent / "code_nexus.db")
+)
 
 
 class DataStore:
