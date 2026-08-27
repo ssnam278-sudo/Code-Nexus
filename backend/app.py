@@ -11,9 +11,11 @@ from typing import Any
 from flask import Flask, jsonify, request, send_from_directory
 
 from .alerts import ALERT_STATES, build_alert, priority_queue
+from .cap import build_cap_alert, to_xml as cap_to_xml
 from .data_connectors import source_register
 from .open_meteo import fetch_current
 from .realtime import publish, stream, subscribe, unsubscribe
+from .replay import EVENTS as REPLAY_EVENTS, run_replay
 from .simulator import DataStore, SCENARIO_BOOSTS, simulate_zone
 from .thresholds import operational_level, threshold_for
 
@@ -479,6 +481,56 @@ def alerts() -> Any:
             "stored": store.recent("alerts"),
         }
     )
+
+
+@app.get("/api/replay/events")
+def replay_events() -> Any:
+    return jsonify([
+        {
+            "id": e.id,
+            "name": e.name,
+            "description": e.description,
+            "failure_utc": e.failure_utc,
+            "is_control": e.failure_utc is None,
+            "latitude": e.latitude,
+            "longitude": e.longitude,
+            "source": e.source,
+        }
+        for e in REPLAY_EVENTS.values()
+    ])
+
+
+@app.get("/api/replay")
+def replay() -> Any:
+    event_id = request.args.get("event", "")
+    refresh = request.args.get("refresh", "false").lower() == "true"
+    try:
+        return jsonify(run_replay(event_id, refresh=refresh))
+    except KeyError:
+        return jsonify({"error": "unknown event", "events": sorted(REPLAY_EVENTS)}), 404
+    except (OSError, RuntimeError, ValueError) as error:
+        return jsonify({"error": "replay unavailable", "detail": str(error)}), 502
+
+
+@app.get("/api/cap")
+def cap_alert() -> Any:
+    zone_id = request.args.get("zone_id")
+    scenario = request.args.get("scenario", "Normal")
+    if scenario not in SCENARIO_BOOSTS:
+        return jsonify({"error": f"unknown scenario: {scenario}"}), 400
+    try:
+        zone = _find_zone(zone_id) if zone_id else _zone_records()[0]
+    except KeyError:
+        return jsonify({"error": "zone not found"}), 404
+
+    risk = _risk_record(zone, scenario)
+    alert = build_alert(zone, risk)
+    payload = {**risk, "explanation": risk.get("explanation"), "recommended_action": alert["recommended_action"]}
+    cap = build_cap_alert(zone, payload)
+
+    if request.args.get("format", "json").lower() == "xml":
+        return app.response_class(cap_to_xml(cap), mimetype="application/xml")
+    return jsonify(cap)
 
 
 @app.get("/api/sensor-updates")

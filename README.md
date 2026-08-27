@@ -58,6 +58,45 @@ Scores are classified as:
 | 55-74 | High |
 | 75-100 | Critical |
 
+### Rainfall-triggered hazard model
+
+`backend/rainfall_model.py` is a physically motivated, citable replacement for
+the flat weighted sum:
+
+- **Antecedent Precipitation Index** (decayed running rainfall) &rarr; a 0-1
+  wetness / saturation state.
+- **Intensity-Duration threshold** &mdash; Caine (1980) global line
+  `I_crit = 14.82 &middot; D^-0.39`; the storm's mean intensity over trailing
+  3/6/12/24/48/72 h windows is scored against it.
+- **Mora-Vahrson composition** &mdash; hazard is a static *predisposition*
+  (slope, susceptibility, history) modulated by the rainfall *trigger*.
+
+See [`MODEL_CARD.md`](MODEL_CARD.md) for constants, calibration, and limitations,
+and [`ARCHITECTURE.md`](ARCHITECTURE.md) for the data pipeline.
+
+### Historical event replay
+
+`python -m backend.replay` feeds **real past rainfall** (ERA5 via the Open-Meteo
+archive, cached under `backend/data/replay_cache/`) through the hazard model and
+reports how many hours of warning it would have produced:
+
+```text
+East Khasi Hills (Sohra), Meghalaya: warning at High 63 h before failure, Critical 26 h before
+NH-10 corridor (Rangpo-Singtam), Sikkim: warning at High 60 h before failure
+Sohra - ordinary monsoon week (control): stayed calm (peak score 43) - no false alarm
+```
+
+API: `GET /api/replay/events`, `GET /api/replay?event=<id>`.
+
+### CAP 1.2 alert output
+
+`backend/cap.py` renders High/Critical alerts as **Common Alerting Protocol 1.2**
+(the OASIS standard behind India's SACHET platform), so an alert can be handed to
+SACHET / state SDMA / cell broadcast without reformatting. Messages carry
+`status = Exercise` and are unsigned in the prototype.
+
+API: `GET /api/cap?zone_id=<id>&format=json|xml`.
+
 ## Project structure
 
 ```text
