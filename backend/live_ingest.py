@@ -35,7 +35,8 @@ def fetch_hourly(latitude: float, longitude: float, *, timeout: float = 30.0) ->
     query = urllib.parse.urlencode({
         "latitude": latitude,
         "longitude": longitude,
-        "hourly": "precipitation",
+        "hourly": ("precipitation,precipitation_probability,"
+                   "soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm"),
         "past_days": PAST_DAYS,
         "forecast_days": FORECAST_DAYS,
         "timezone": "UTC",
@@ -48,11 +49,28 @@ def fetch_hourly(latitude: float, longitude: float, *, timeout: float = 30.0) ->
     precip = [float(x or 0.0) for x in hourly.get("precipitation", [])]
     if not times or len(times) != len(precip):
         raise RuntimeError("malformed Open-Meteo hourly response")
-    cutoff = _now_hour()
-    rows = [
-        {"ts_utc": t, "precip_mm": p, "kind": "observed" if t <= cutoff else "forecast"}
-        for t, p in zip(times, precip)
+
+    prob = hourly.get("precipitation_probability", []) or [None] * len(times)
+    sm_layers = [
+        hourly.get("soil_moisture_0_to_1cm", []) or [],
+        hourly.get("soil_moisture_1_to_3cm", []) or [],
+        hourly.get("soil_moisture_3_to_9cm", []) or [],
     ]
+
+    def _soil(i: int):
+        vals = [layer[i] for layer in sm_layers if i < len(layer) and layer[i] is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    cutoff = _now_hour()
+    rows = []
+    for i, (t, p) in enumerate(zip(times, precip)):
+        rows.append({
+            "ts_utc": t,
+            "precip_mm": p,
+            "kind": "observed" if t <= cutoff else "forecast",
+            "soil_moist": _soil(i),
+            "precip_prob": (float(prob[i]) if i < len(prob) and prob[i] is not None else None),
+        })
     return {"rows": rows, "cutoff": cutoff, "provider": "Open-Meteo"}
 
 

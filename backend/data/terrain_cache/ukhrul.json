@@ -1,0 +1,19 @@
+{
+ "zone_id": "ukhrul",
+ "slope": 38.3,
+ "susceptibility": 44.1,
+ "dem_slope": 31.5,
+ "dem_susceptibility": 43.6,
+ "prior_slope": 51.0,
+ "prior_susceptibility": 45.0,
+ "metrics": {
+  "elevation_m": 1889.0,
+  "slope_deg": 5.77,
+  "mean_slope_deg": 6.88,
+  "steep_slope_deg": 11.96,
+  "local_relief_m": 737.0,
+  "roughness_m": 157.47,
+  "profile_curvature": -0.0004576947502467511
+ },
+ "source": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior"
+}

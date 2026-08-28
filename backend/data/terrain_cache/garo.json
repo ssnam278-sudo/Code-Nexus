@@ -1,0 +1,19 @@
+{
+ "zone_id": "garo",
+ "slope": 20.8,
+ "susceptibility": 21.8,
+ "dem_slope": 8.9,
+ "dem_susceptibility": 10.9,
+ "prior_slope": 43.0,
+ "prior_susceptibility": 42.0,
+ "metrics": {
+  "elevation_m": 26.0,
+  "slope_deg": 1.04,
+  "mean_slope_deg": 1.84,
+  "steep_slope_deg": 3.37,
+  "local_relief_m": 241.0,
+  "roughness_m": 61.82,
+  "profile_curvature": 0.00016337676350148384
+ },
+ "source": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior"
+}

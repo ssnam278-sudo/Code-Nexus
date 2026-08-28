@@ -1,0 +1,19 @@
+{
+ "zone_id": "ziro",
+ "slope": 29.1,
+ "susceptibility": 34.3,
+ "dem_slope": 19.0,
+ "dem_susceptibility": 27.5,
+ "prior_slope": 48.0,
+ "prior_susceptibility": 47.0,
+ "metrics": {
+  "elevation_m": 1567.0,
+  "slope_deg": 4.13,
+  "mean_slope_deg": 4.09,
+  "steep_slope_deg": 7.22,
+  "local_relief_m": 759.0,
+  "roughness_m": 129.98,
+  "profile_curvature": 0.0003227384739428905
+ },
+ "source": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior"
+}

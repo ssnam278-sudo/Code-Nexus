@@ -1,0 +1,19 @@
+{
+ "zone_id": "tawang",
+ "slope": 61.9,
+ "susceptibility": 81.8,
+ "dem_slope": 56.5,
+ "dem_susceptibility": 81.7,
+ "prior_slope": 72.0,
+ "prior_susceptibility": 82.0,
+ "metrics": {
+  "elevation_m": 2922.0,
+  "slope_deg": 11.21,
+  "mean_slope_deg": 13.96,
+  "steep_slope_deg": 21.46,
+  "local_relief_m": 2459.0,
+  "roughness_m": 663.22,
+  "profile_curvature": -0.0004927535400515015
+ },
+ "source": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior"
+}

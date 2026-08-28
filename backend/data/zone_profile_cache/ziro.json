@@ -1,0 +1,45 @@
+{
+ "zone_id": "ziro",
+ "name": "Ziro Valley",
+ "coordinates": [
+  27.5444,
+  93.8197
+ ],
+ "slope": 29.1,
+ "susceptibility": 34.3,
+ "history": 27.9,
+ "exposure": 58.0,
+ "terrain_metrics": {
+  "elevation_m": 1567.0,
+  "slope_deg": 4.13,
+  "mean_slope_deg": 4.09,
+  "steep_slope_deg": 7.22,
+  "local_relief_m": 759.0,
+  "roughness_m": 129.98,
+  "profile_curvature": 0.0003227384739428905
+ },
+ "history_detail": {
+  "inventory_score": 24.8,
+  "prior": 31.0,
+  "nearby_events": [
+   {
+    "place": "Itanagar-Naharlagun, Arunachal Pradesh",
+    "date": "2022-06-17",
+    "distance_km": 53.2,
+    "weight": 0.221
+   },
+   {
+    "place": "Papum Pare (NH-415), Arunachal Pradesh",
+    "date": "2024-06-14",
+    "distance_km": 51.9,
+    "weight": 0.15
+   }
+  ],
+  "events_within_range": 2
+ },
+ "sources": {
+  "terrain": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior",
+  "history": "Curated NER landslide inventory (15 real dated events) (blended 50/50 with prior)",
+  "exposure": "zones.json (prototype)"
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "zone_id": "chura",
+ "name": "Churachandpur Ridge",
+ "coordinates": [
+  24.3333,
+  93.6833
+ ],
+ "slope": 32.5,
+ "susceptibility": 41.9,
+ "history": 36.1,
+ "exposure": 63.0,
+ "terrain_metrics": {
+  "elevation_m": 866.0,
+  "slope_deg": 2.33,
+  "mean_slope_deg": 3.7,
+  "steep_slope_deg": 7.76,
+  "local_relief_m": 816.0,
+  "roughness_m": 206.56,
+  "profile_curvature": 3.8006803342337966e-05
+ },
+ "history_detail": {
+  "inventory_score": 24.2,
+  "prior": 48.0,
+  "nearby_events": [
+   {
+    "place": "Tupul / Noney, Manipur",
+    "date": "2022-06-30",
+    "distance_km": 38.6,
+    "weight": 0.361
+   }
+  ],
+  "events_within_range": 1
+ },
+ "sources": {
+  "terrain": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior",
+  "history": "Curated NER landslide inventory (15 real dated events) (blended 50/50 with prior)",
+  "exposure": "zones.json (prototype)"
+ }
+}

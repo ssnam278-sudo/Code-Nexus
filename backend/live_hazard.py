@@ -37,7 +37,8 @@ def zone_live_hazard(store: LiveStore, zone: Mapping[str, Any]) -> dict[str, Any
 
     times = [r["ts_utc"] for r in rows]
     precip = [float(r["precip_mm"]) for r in rows]
-    kinds = [r["kind"] for r in rows]
+    soil = [r.get("soil_moist") for r in rows]
+    prob = [r.get("precip_prob") for r in rows]
     n = len(rows)
 
     cutoff = _now_hour_iso()
@@ -45,16 +46,21 @@ def zone_live_hazard(store: LiveStore, zone: Mapping[str, Any]) -> dict[str, Any
 
     slope = float(zone["slope"]); susc = float(zone["susceptibility"]); hist = float(zone["history"])
 
+    def _sm_frac(idx: int) -> float | None:
+        v = soil[idx]
+        return None if v is None else max(0.0, min(1.0, float(v) / 0.5))  # m3/m3 -> 0..1
+
     def at(idx: int) -> dict[str, Any]:
         api = antecedent_index(_daily_before(precip, idx, 15))
         exc = storm_exceedance(precip[: idx + 1])["ratio"]
-        h = hazard(slope=slope, susceptibility=susc, history=hist, api_mm=api, exceedance_ratio=exc)
-        return h
+        return hazard(slope=slope, susceptibility=susc, history=hist,
+                      api_mm=api, exceedance_ratio=exc, soil_moisture_frac=_sm_frac(idx))
 
     now = at(now_idx)
     now.update({
         "rain_1h": round(precip[now_idx], 2),
         "rain_24h": round(sum(precip[max(0, now_idx - 23): now_idx + 1]), 1),
+        "soil_moisture_m3m3": (round(soil[now_idx], 3) if soil[now_idx] is not None else None),
         "observed_through": times[now_idx],
     })
 
@@ -82,6 +88,14 @@ def zone_live_hazard(store: LiveStore, zone: Mapping[str, Any]) -> dict[str, Any
     lead_high = 0 if now["risk_level"] in WARN_LEVELS else first_sustained(WARN_LEVELS)
     lead_crit = 0 if now["risk_level"] == "Critical" else first_sustained({"Critical"})
 
+    def _confidence(hours_ahead: int | None) -> int | None:
+        """Mean forecast precipitation probability from now to the crossing hour."""
+        if not hours_ahead:
+            return None
+        window = [prob[now_idx + k] for k in range(1, hours_ahead + 1)
+                  if now_idx + k < n and prob[now_idx + k] is not None]
+        return round(sum(window) / len(window)) if window else None
+
     peak = max(trajectory, key=lambda s: s["risk_score"]) if trajectory else None
     horizon = []
     for hrs in HORIZONS_H:
@@ -103,6 +117,7 @@ def zone_live_hazard(store: LiveStore, zone: Mapping[str, Any]) -> dict[str, Any
             "projected_peak_time": peak["time"] if peak else now["observed_through"] + "Z",
             "lead_time_to_high_h": lead_high,
             "lead_time_to_critical_h": lead_crit,
+            "lead_confidence_pct": _confidence(lead_high or lead_crit),
             "horizon": horizon,
         },
         "trajectory": trajectory,

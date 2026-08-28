@@ -1,0 +1,39 @@
+{
+ "zone_id": "bomdila",
+ "name": "Bomdila Pass",
+ "coordinates": [
+  27.2648,
+  92.4246
+ ],
+ "slope": 47.2,
+ "susceptibility": 61.0,
+ "history": 15.5,
+ "exposure": 32.0,
+ "terrain_metrics": {
+  "elevation_m": 2483.0,
+  "slope_deg": 7.4,
+  "mean_slope_deg": 12.94,
+  "steep_slope_deg": 19.84,
+  "local_relief_m": 1529.0,
+  "roughness_m": 352.74,
+  "profile_curvature": -0.00020040680425636027
+ },
+ "history_detail": {
+  "inventory_score": 6.0,
+  "prior": 25.0,
+  "nearby_events": [
+   {
+    "place": "Tawang district roads, Arunachal Pradesh",
+    "date": "2022-07-01",
+    "distance_km": 65.8,
+    "weight": 0.081
+   }
+  ],
+  "events_within_range": 1
+ },
+ "sources": {
+  "terrain": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior",
+  "history": "Curated NER landslide inventory (15 real dated events) (blended 50/50 with prior)",
+  "exposure": "zones.json (prototype)"
+ }
+}

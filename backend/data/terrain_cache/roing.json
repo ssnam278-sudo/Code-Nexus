@@ -1,0 +1,19 @@
+{
+ "zone_id": "roing",
+ "slope": 41.9,
+ "susceptibility": 50.6,
+ "dem_slope": 30.0,
+ "dem_susceptibility": 41.3,
+ "prior_slope": 64.0,
+ "prior_susceptibility": 68.0,
+ "metrics": {
+  "elevation_m": 385.0,
+  "slope_deg": 4.5,
+  "mean_slope_deg": 5.32,
+  "steep_slope_deg": 11.39,
+  "local_relief_m": 983.0,
+  "roughness_m": 242.02,
+  "profile_curvature": 9.67860206373131e-05
+ },
+ "source": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior"
+}

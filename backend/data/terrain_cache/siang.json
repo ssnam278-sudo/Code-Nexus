@@ -1,0 +1,19 @@
+{
+ "zone_id": "siang",
+ "slope": 27.5,
+ "susceptibility": 36.1,
+ "dem_slope": 9.4,
+ "dem_susceptibility": 21.1,
+ "prior_slope": 61.0,
+ "prior_susceptibility": 64.0,
+ "metrics": {
+  "elevation_m": 181.0,
+  "slope_deg": 0.75,
+  "mean_slope_deg": 1.42,
+  "steep_slope_deg": 3.58,
+  "local_relief_m": 256.0,
+  "roughness_m": 55.62,
+  "profile_curvature": -3.73767766379092e-05
+ },
+ "source": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior"
+}

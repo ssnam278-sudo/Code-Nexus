@@ -1,0 +1,19 @@
+{
+ "zone_id": "chura",
+ "slope": 32.5,
+ "susceptibility": 41.9,
+ "dem_slope": 20.4,
+ "dem_susceptibility": 32.7,
+ "prior_slope": 55.0,
+ "prior_susceptibility": 59.0,
+ "metrics": {
+  "elevation_m": 866.0,
+  "slope_deg": 2.33,
+  "mean_slope_deg": 3.7,
+  "steep_slope_deg": 7.76,
+  "local_relief_m": 816.0,
+  "roughness_m": 206.56,
+  "profile_curvature": 3.8006803342337966e-05
+ },
+ "source": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior"
+}

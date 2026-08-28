@@ -1,0 +1,32 @@
+{
+ "zone_id": "garo",
+ "name": "South Garo Hills",
+ "coordinates": [
+  25.198,
+  90.63
+ ],
+ "slope": 20.8,
+ "susceptibility": 21.8,
+ "history": 17.5,
+ "exposure": 51.0,
+ "terrain_metrics": {
+  "elevation_m": 26.0,
+  "slope_deg": 1.04,
+  "mean_slope_deg": 1.84,
+  "steep_slope_deg": 3.37,
+  "local_relief_m": 241.0,
+  "roughness_m": 61.82,
+  "profile_curvature": 0.00016337676350148384
+ },
+ "history_detail": {
+  "inventory_score": 0.0,
+  "prior": 35.0,
+  "nearby_events": [],
+  "events_within_range": 0
+ },
+ "sources": {
+  "terrain": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior",
+  "history": "Curated NER landslide inventory (15 real dated events) (blended 50/50 with prior)",
+  "exposure": "zones.json (prototype)"
+ }
+}

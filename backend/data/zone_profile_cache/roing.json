@@ -1,0 +1,32 @@
+{
+ "zone_id": "roing",
+ "name": "Roing Foothills",
+ "coordinates": [
+  28.1397,
+  95.84
+ ],
+ "slope": 41.9,
+ "susceptibility": 50.6,
+ "history": 26.0,
+ "exposure": 61.0,
+ "terrain_metrics": {
+  "elevation_m": 385.0,
+  "slope_deg": 4.5,
+  "mean_slope_deg": 5.32,
+  "steep_slope_deg": 11.39,
+  "local_relief_m": 983.0,
+  "roughness_m": 242.02,
+  "profile_curvature": 9.67860206373131e-05
+ },
+ "history_detail": {
+  "inventory_score": 0.0,
+  "prior": 52.0,
+  "nearby_events": [],
+  "events_within_range": 0
+ },
+ "sources": {
+  "terrain": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior",
+  "history": "Curated NER landslide inventory (15 real dated events) (blended 50/50 with prior)",
+  "exposure": "zones.json (prototype)"
+ }
+}

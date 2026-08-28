@@ -1,0 +1,19 @@
+{
+ "zone_id": "bomdila",
+ "slope": 47.2,
+ "susceptibility": 61.0,
+ "dem_slope": 52.2,
+ "dem_susceptibility": 75.5,
+ "prior_slope": 38.0,
+ "prior_susceptibility": 34.0,
+ "metrics": {
+  "elevation_m": 2483.0,
+  "slope_deg": 7.4,
+  "mean_slope_deg": 12.94,
+  "steep_slope_deg": 19.84,
+  "local_relief_m": 1529.0,
+  "roughness_m": 352.74,
+  "profile_curvature": -0.00020040680425636027
+ },
+ "source": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior"
+}

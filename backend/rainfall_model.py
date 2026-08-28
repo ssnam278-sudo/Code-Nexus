@@ -101,7 +101,18 @@ def storm_exceedance(hourly_rainfall_mm: Sequence[float], durations_h: Iterable[
     return best
 
 
-def trigger_index(api_mm: float, exceedance_ratio: float) -> float:
+def effective_wetness(api_mm: float, soil_moisture_frac: float | None = None) -> float:
+    """Chronic wetness 0..1. When a measured near-surface soil-moisture fraction
+    is available it is blended with the modelled antecedent index as a
+    cross-check (0.6 model / 0.4 measurement)."""
+    wet = wetness_index(api_mm)
+    if soil_moisture_frac is None:
+        return wet
+    return round(_clamp(0.6 * wet + 0.4 * _clamp(soil_moisture_frac)), 4)
+
+
+def trigger_index(api_mm: float, exceedance_ratio: float,
+                  soil_moisture_frac: float | None = None) -> float:
     """Combine chronic wetness and the acute storm signal into 0..1.
 
     The acute (intensity) term is *gated* by wetness: an intense burst on dry,
@@ -109,7 +120,7 @@ def trigger_index(api_mm: float, exceedance_ratio: float) -> float:
     after days of rain, so its weight scales from ACUTE_DRY_FLOOR (dry) up to full
     (saturated).  This is what stops the model crying wolf on isolated cloudbursts.
     """
-    wet = wetness_index(api_mm)
+    wet = effective_wetness(api_mm, soil_moisture_frac)
     acute = _clamp(exceedance_ratio / ACUTE_SATURATION)
     acute_gated = acute * (ACUTE_DRY_FLOOR + (1.0 - ACUTE_DRY_FLOOR) * wet)
     return round(_clamp(TRIGGER_MIX["wetness"] * wet + TRIGGER_MIX["acute"] * acute_gated), 4)
@@ -141,10 +152,11 @@ def hazard(
     history: float,
     api_mm: float,
     exceedance_ratio: float,
+    soil_moisture_frac: float | None = None,
 ) -> dict:
     """Full rainfall-triggered hazard result for one point in time."""
     predisp = predisposition_index(slope, susceptibility, history)
-    trig = trigger_index(api_mm, exceedance_ratio)
+    trig = trigger_index(api_mm, exceedance_ratio, soil_moisture_frac)
     score = 100.0 * (predisp ** PREDISPOSITION_EXPONENT) * (
         TRIGGER_BASELINE + (1.0 - TRIGGER_BASELINE) * trig
     )
@@ -154,8 +166,11 @@ def hazard(
         "risk_level": classify(score),
         "predisposition": predisp,
         "trigger_index": trig,
-        "wetness_index": wetness_index(api_mm),
+        "wetness_index": effective_wetness(api_mm, soil_moisture_frac),
         "api_mm": round(api_mm, 1),
+        "soil_moisture_frac": (round(soil_moisture_frac, 3)
+                               if soil_moisture_frac is not None else None),
         "exceedance_ratio": round(exceedance_ratio, 3),
-        "method": "API + Caine(1980) ID threshold, Mora-Vahrson composition",
+        "method": ("API + measured soil moisture + Caine(1980) ID threshold, "
+                   "Mora-Vahrson composition"),
     }

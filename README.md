@@ -74,6 +74,23 @@ the flat weighted sum:
 See [`MODEL_CARD.md`](MODEL_CARD.md) for constants, calibration, and limitations,
 and [`ARCHITECTURE.md`](ARCHITECTURE.md) for the data pipeline.
 
+### Real terrain and historical inventory
+
+The `slope`, `susceptibility` and `history` factors are no longer hand-set
+constants:
+
+- **`backend/terrain.py`** samples a 9x9 elevation grid (~9 km) per zone from the
+  free Open-Meteo Elevation API (SRTM/GLO ~90 m) and derives slope angle, local
+  relief, surface roughness and profile curvature -> a DEM susceptibility index.
+- **`backend/landslide_inventory.py`** holds 15 real, dated NER landslides; a
+  distance- and recency-decayed density gives the historical-vulnerability factor.
+- **`backend/zone_profile.py`** blends each with the curated `zones.json` prior
+  (65/35 terrain, 50/50 history) and caches the result. Endpoint: `GET /api/terrain`.
+
+Live rainfall ingestion also pulls **measured soil moisture** and **forecast
+precipitation probability**; soil moisture cross-checks the antecedent index and
+the probability becomes a confidence figure on the projected lead time.
+
 ### Historical event replay
 
 `python -m backend.replay` feeds **real past rainfall** (ERA5 via the Open-Meteo

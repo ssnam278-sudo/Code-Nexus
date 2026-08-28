@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS rainfall_hourly (
     ts_utc      TEXT NOT NULL,          -- 'YYYY-MM-DDTHH:00'
     precip_mm   REAL NOT NULL,
     kind        TEXT NOT NULL,          -- 'observed' | 'forecast'
+    soil_moist  REAL,                   -- volumetric, m3/m3 (0..~0.5); nullable
+    precip_prob REAL,                   -- forecast precipitation probability %, nullable
     fetched_at  TEXT NOT NULL,
     PRIMARY KEY (zone_id, ts_utc)
 );
@@ -44,6 +46,10 @@ class LiveStore:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._conn()) as c, c:
             c.executescript(_SCHEMA)
+            have = {r[1] for r in c.execute("PRAGMA table_info(rainfall_hourly)")}
+            for col, decl in (("soil_moist", "REAL"), ("precip_prob", "REAL")):
+                if col not in have:
+                    c.execute(f"ALTER TABLE rainfall_hourly ADD COLUMN {col} {decl}")
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.database_path, timeout=15)
@@ -57,18 +63,27 @@ class LiveStore:
     # --- rainfall ---------------------------------------------------------
     def upsert_hours(self, zone_id: str, rows: Iterable[Mapping[str, object]]) -> int:
         fetched = self.now()
+
+        def _opt(v):
+            return None if v is None else float(v)
+
         payload = [
-            (zone_id, r["ts_utc"], float(r["precip_mm"]), str(r["kind"]), fetched)
+            (zone_id, r["ts_utc"], float(r["precip_mm"]), str(r["kind"]),
+             _opt(r.get("soil_moist")), _opt(r.get("precip_prob")), fetched)
             for r in rows
         ]
         if not payload:
             return 0
         with closing(self._conn()) as c, c:
             c.executemany(
-                "INSERT INTO rainfall_hourly (zone_id, ts_utc, precip_mm, kind, fetched_at) "
-                "VALUES (?, ?, ?, ?, ?) "
+                "INSERT INTO rainfall_hourly "
+                "(zone_id, ts_utc, precip_mm, kind, soil_moist, precip_prob, fetched_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(zone_id, ts_utc) DO UPDATE SET "
-                "precip_mm=excluded.precip_mm, kind=excluded.kind, fetched_at=excluded.fetched_at",
+                "precip_mm=excluded.precip_mm, kind=excluded.kind, "
+                "soil_moist=COALESCE(excluded.soil_moist, rainfall_hourly.soil_moist), "
+                "precip_prob=COALESCE(excluded.precip_prob, rainfall_hourly.precip_prob), "
+                "fetched_at=excluded.fetched_at",
                 payload,
             )
         return len(payload)
@@ -76,7 +91,7 @@ class LiveStore:
     def series(self, zone_id: str) -> list[dict]:
         with closing(self._conn()) as c, c:
             rows = c.execute(
-                "SELECT ts_utc, precip_mm, kind FROM rainfall_hourly "
+                "SELECT ts_utc, precip_mm, kind, soil_moist, precip_prob FROM rainfall_hourly "
                 "WHERE zone_id = ? ORDER BY ts_utc",
                 (zone_id,),
             ).fetchall()

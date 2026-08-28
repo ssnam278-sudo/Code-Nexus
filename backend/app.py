@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import time
@@ -55,6 +56,22 @@ def add_cors_headers(response: Any) -> Any:
     return response
 
 
+# DEM + inventory derived terrain/history, loaded once from the committed cache.
+_PROFILES: dict[str, dict[str, Any]] = {}
+
+
+def _load_profiles() -> None:
+    from .zone_profile import _cache as _profile_cache  # local import; avoids cycle at import time
+    _PROFILES.clear()
+    for zone in store.load_dataset("zones"):
+        path = _profile_cache(zone["id"])
+        if path.exists():
+            try:
+                _PROFILES[zone["id"]] = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+
+
 def _zone_records() -> list[dict[str, Any]]:
     datasets = store.load_all_datasets()
 
@@ -68,10 +85,16 @@ def _zone_records() -> list[dict[str, Any]]:
 
     for zone in datasets["zones"]:
         sensor = sensors.get(zone["id"], {})
+        profile = _PROFILES.get(zone["id"], {})
 
         records.append(
             {
                 **zone,
+                # DEM + inventory derived, when available (see /api/terrain)
+                "slope": profile.get("slope", zone.get("slope")),
+                "susceptibility": profile.get("susceptibility", zone.get("susceptibility")),
+                "history": profile.get("history", zone.get("history")),
+                "terrain_source": "dem+inventory" if profile else "static",
                 "sensor_id": sensor.get("id"),
                 "sensor_status": sensor.get("status", "unknown"),
                 "rainfall": sensor.get("rainfall", 0),
@@ -486,6 +509,37 @@ def alerts() -> Any:
             "stored": store.recent("alerts"),
         }
     )
+
+
+@app.get("/api/terrain")
+def terrain_all() -> Any:
+    profiles = []
+    for zone in store.load_dataset("zones"):
+        p = _PROFILES.get(zone["id"])
+        profiles.append(p or {"zone_id": zone["id"], "status": "not_resolved"})
+    return jsonify({"zones": profiles, "count": len(profiles)})
+
+
+@app.get("/api/terrain/<zone_id>")
+def terrain_zone(zone_id: str) -> Any:
+    p = _PROFILES.get(zone_id)
+    if not p:
+        return jsonify({"error": "no terrain profile", "zone_id": zone_id}), 404
+    return jsonify(p)
+
+
+@app.post("/api/terrain/refresh")
+def terrain_refresh() -> Any:
+    from .zone_profile import resolve_profile
+    done, errors = [], []
+    for zone in store.load_dataset("zones"):
+        try:
+            resolve_profile(zone, refresh=True)
+            done.append(zone["id"])
+        except (OSError, RuntimeError, ValueError, KeyError) as exc:
+            errors.append({"zone": zone["id"], "error": str(exc)})
+    _load_profiles()
+    return jsonify({"refreshed": done, "errors": errors})
 
 
 @app.get("/api/replay/events")
@@ -926,6 +980,7 @@ def maybe_start_live_ingest() -> None:
         print(f"[live_ingest] scheduler started (every {interval}s)", flush=True)
 
 
+_load_profiles()
 maybe_start_live_ingest()
 
 

@@ -1,0 +1,39 @@
+{
+ "zone_id": "ukhrul",
+ "name": "Ukhrul Ridge",
+ "coordinates": [
+  25.0968,
+  94.3614
+ ],
+ "slope": 38.3,
+ "susceptibility": 44.1,
+ "history": 39.0,
+ "exposure": 44.0,
+ "terrain_metrics": {
+  "elevation_m": 1889.0,
+  "slope_deg": 5.77,
+  "mean_slope_deg": 6.88,
+  "steep_slope_deg": 11.96,
+  "local_relief_m": 737.0,
+  "roughness_m": 157.47,
+  "profile_curvature": -0.0004576947502467511
+ },
+ "history_detail": {
+  "inventory_score": 39.9,
+  "prior": 38.0,
+  "nearby_events": [
+   {
+    "place": "Ukhrul, Manipur",
+    "date": "2023-07-16",
+    "distance_km": 5.2,
+    "weight": 0.661
+   }
+  ],
+  "events_within_range": 1
+ },
+ "sources": {
+  "terrain": "Open-Meteo Elevation (SRTM/GLO ~90 m), 65/35 blend with corridor prior",
+  "history": "Curated NER landslide inventory (15 real dated events) (blended 50/50 with prior)",
+  "exposure": "zones.json (prototype)"
+ }
+}
