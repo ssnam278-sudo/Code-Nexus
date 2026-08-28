@@ -5,15 +5,18 @@
 ```mermaid
 flowchart LR
   subgraph Ingest
-    A1[IMD AWS / GPM-IMERG<br/>rainfall]:::live
-    A2[Open-Meteo<br/>forecast + ERA5 archive]:::live
+    A2[Open-Meteo<br/>16-day obs + 7-day forecast<br/>+ ERA5 archive]:::live
+    A6[live_ingest.py<br/>scheduler / GET /api/tick<br/>every 15 min]:::live
+    A1[IMD AWS / GPM-IMERG<br/>rainfall]:::future
     A3[Local tipping-bucket<br/>gauges / IoT]:::future
     A4[SRTM / Cartosat DEM<br/>-> slope]:::future
     A5[GSI susceptibility +<br/>landslide inventory]:::future
   end
 
-  A1 & A2 & A3 --> Q[Ingestion API<br/>POST /api/ingest/telemetry<br/>+ validation]
+  A2 --> A6 --> RH[(rainfall_hourly<br/>observed + forecast)]
+  A1 & A3 --> Q[Ingestion API<br/>POST /api/ingest/telemetry]
   A4 & A5 --> S[(Static terrain<br/>layers per zone)]
+  RH --> M
 
   Q --> DB[(SQLite / Postgres<br/>readings, alerts, reports)]
   Q --> RT[Event broker<br/>SSE /api/events]

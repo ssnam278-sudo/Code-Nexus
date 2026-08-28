@@ -88,6 +88,31 @@ Sohra - ordinary monsoon week (control): stayed calm (peak score 43) - no false 
 
 API: `GET /api/replay/events`, `GET /api/replay?event=<id>`.
 
+### Real-time mode
+
+With `CODENEXUS_LIVE_INGEST=1` (set in `render.yaml`) a background loop pulls
+**real hourly rainfall** from Open-Meteo every 15 minutes for every zone — 16 days
+of observations plus a 7-day forecast — and stores it in SQLite. The hazard model
+then runs on the actual series:
+
+- **Now:** antecedent index from the observed tail + current ID-threshold exceedance.
+- **Forecast:** the model is projected hour-by-hour along the forecast rainfall;
+  the first sustained crossing gives a **lead time** ("Critical projected in ~18 h").
+- **Dispatch:** when a zone first escalates to High/Critical, a CAP alert is
+  stored and logged; if `ALERT_WEBHOOK_URL` is set it is POSTed there
+  (Slack / Discord / Telegram-bot / any JSON endpoint).
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/live/hazard` | All zones: now score, projected peak, lead times, 4-day trajectory |
+| `GET /api/live/hazard/<zone_id>` | One zone in detail |
+| `GET,POST /api/tick` | Run one ingest + hazard + dispatch cycle (for cron / serverless) |
+
+Serverless (Vercel) can't run the background loop — schedule `GET /api/tick`
+every 15 min with Vercel Cron or a GitHub Action, and use a hosted Postgres
+since the filesystem is ephemeral. The dashboard's **Live forecast** tab shows
+the per-zone trajectory and lead times.
+
 ### CAP 1.2 alert output
 
 `backend/cap.py` renders High/Critical alerts as **Common Alerting Protocol 1.2**

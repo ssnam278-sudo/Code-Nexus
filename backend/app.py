@@ -11,8 +11,12 @@ from typing import Any
 from flask import Flask, jsonify, request, send_from_directory
 
 from .alerts import ALERT_STATES, build_alert, priority_queue
+from .alert_dispatch import dispatch as dispatch_alert
 from .cap import build_cap_alert, to_xml as cap_to_xml
 from .data_connectors import source_register
+from .live_hazard import all_live_hazards, zone_live_hazard
+from .live_ingest import ingest_all, start_scheduler
+from .live_store import LiveStore
 from .open_meteo import fetch_current
 from .realtime import publish, stream, subscribe, unsubscribe
 from .replay import EVENTS as REPLAY_EVENTS, run_replay
@@ -24,6 +28,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
 store = DataStore()
+live_store = LiveStore(store.database_path)
 _open_meteo_last_sync = 0.0
 _open_meteo_sync_seconds = float(os.getenv("OPEN_METEO_SYNC_SECONDS", "600"))
 
@@ -533,6 +538,61 @@ def cap_alert() -> Any:
     return jsonify(cap)
 
 
+def _live_zones() -> list[dict[str, Any]]:
+    """Zone records with the static terrain fields the hazard model needs."""
+    return [
+        z for z in _zone_records()
+        if all(k in z for k in ("slope", "susceptibility", "history", "coordinates"))
+    ]
+
+
+def _run_live_cycle(refresh: bool = True) -> dict[str, Any]:
+    """One real-time step: pull rainfall, recompute hazard, dispatch escalations."""
+    zones = _live_zones()
+    ingest_summary = ingest_all(live_store, zones) if refresh else {"skipped": True}
+    dispatched = []
+    for zone in zones:
+        try:
+            hz = zone_live_hazard(live_store, zone)
+            if hz.get("now"):
+                result = dispatch_alert(live_store, zone, hz)
+                if result.get("dispatched"):
+                    dispatched.append(result)
+        except (KeyError, TypeError, ValueError) as exc:  # pragma: no cover - defensive
+            dispatched.append({"zone": zone.get("id"), "error": str(exc)})
+    return {"ingest": ingest_summary, "alerts_dispatched": dispatched}
+
+
+@app.get("/api/live/hazard")
+def live_hazard() -> Any:
+    zones = _live_zones()
+    if not live_store.has_data():
+        try:
+            ingest_all(live_store, zones)
+        except (OSError, RuntimeError) as error:
+            return jsonify({"status": "warming_up", "detail": str(error), "zones": []}), 200
+    return jsonify(all_live_hazards(live_store, zones))
+
+
+@app.get("/api/live/hazard/<zone_id>")
+def live_hazard_zone(zone_id: str) -> Any:
+    try:
+        zone = _find_zone(zone_id)
+    except KeyError:
+        return jsonify({"error": "zone not found"}), 404
+    return jsonify(zone_live_hazard(live_store, zone))
+
+
+@app.get("/api/tick")
+@app.post("/api/tick")
+def live_tick() -> Any:
+    """Run one ingestion + hazard + dispatch cycle. For cron / serverless setups."""
+    try:
+        return jsonify(_run_live_cycle(refresh=True))
+    except (OSError, RuntimeError) as error:
+        return jsonify({"error": "tick failed", "detail": str(error)}), 502
+
+
 @app.get("/api/sensor-updates")
 def sensor_updates() -> Any:
     return jsonify(
@@ -838,6 +898,35 @@ def ingest_telemetry() -> Any:
     store.save_sensor_update(reading)
     publish("telemetry", reading)
     return jsonify({"status": "accepted", "reading": reading}), 202
+
+
+def maybe_start_live_ingest() -> None:
+    """Start the background rainfall loop when explicitly enabled (Render sets this).
+
+    Off by default so imports in tests / local dev never spawn a network thread;
+    serverless deployments use GET /api/tick on a cron instead.
+    """
+    if os.getenv("CODENEXUS_LIVE_INGEST", "0").lower() not in {"1", "true", "yes"}:
+        return
+    interval = int(os.getenv("CODENEXUS_LIVE_INGEST_SECONDS", "900"))
+
+    def _on_cycle(_summary: Any) -> None:
+        for zone in _live_zones():
+            try:
+                hz = zone_live_hazard(live_store, zone)
+                if hz.get("now"):
+                    dispatch_alert(live_store, zone, hz)
+            except (KeyError, TypeError, ValueError):
+                pass
+
+    started = start_scheduler(
+        live_store, _live_zones, interval_seconds=interval, on_cycle=_on_cycle
+    )
+    if started:
+        print(f"[live_ingest] scheduler started (every {interval}s)", flush=True)
+
+
+maybe_start_live_ingest()
 
 
 if __name__ == "__main__":

@@ -4,7 +4,8 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn backend.app:app --bind 0.0.0.0:$PORT
+    # one worker so the background rainfall scheduler runs a single loop
+    startCommand: gunicorn backend.app:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
@@ -12,3 +13,11 @@ services:
         value: 3.12.5
       - key: OPEN_METEO_SYNC_SECONDS
         value: "600"
+      - key: CODENEXUS_LIVE_INGEST          # real-time rainfall pull
+        value: "1"
+      - key: CODENEXUS_LIVE_INGEST_SECONDS
+        value: "900"
+      # optional: paste a Slack/Discord/Telegram-bot/other JSON webhook to get
+      # pushed alerts when a zone escalates to High/Critical
+      # - key: ALERT_WEBHOOK_URL
+      #   value: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
