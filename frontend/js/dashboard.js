@@ -47,7 +47,7 @@ const Dashboard = (() => {
 		const co = Array.isArray(zone.coordinates) ? zone.coordinates : [0, 0];
 		$('coordinates').textContent = `${num(co[0]).toFixed(4)}° N, ${num(co[1]).toFixed(4)}° E`;
 		$('risk-explanation').textContent = explanation(zone);
-		renderBreakdown(zone); renderSparklines(zone); renderForecast(zone); renderFieldVerify(zone); renderComparison({ ...state, zones });
+		renderBreakdown(zone); renderSparklines(zone); renderTelemetryMeta(zone, state); renderForecast(zone); renderFieldVerify(zone); renderComparison({ ...state, zones });
 		const feed = document.querySelector('.nav-feed'); if (feed) feed.innerHTML = `<i class="dot ${state.backendConnected ? 'green' : 'cyan'}"></i> ${state.backendConnected ? 'Flask API connected' : 'Offline prototype mode'}`;
 		renderChanges(zone, previous, state); renderExposure(zone); renderZones({ ...state, zones }); renderAlerts({ ...state, zones }); renderPriority({ ...state, zones }); renderReports(state);
 	}
@@ -63,6 +63,15 @@ const Dashboard = (() => {
 		return { rainfall: raw[0] / t * s, soil: raw[1] / t * s, slope: raw[2] / t * s, historical: raw[3] / t * s };
 	}
 	function breakdownParts(zone) {
+		if (zone && zone.liveFactors) {                         // real Open-Meteo path
+			const lf = zone.liveFactors;
+			return [
+				{ label:'Rainfall intensity', pts:Math.max(0, Math.round(num(lf.rainfall))), color:'var(--orange)' },
+				{ label:'Soil saturation', pts:Math.max(0, Math.round(num(lf.soil))), color:'var(--orange)' },
+				{ label:'Slope susceptibility', pts:Math.max(0, Math.round(num(lf.slope))), color:'var(--teal)' },
+				{ label:'Historical events', pts:Math.max(0, Math.round(num(lf.historical))), color:'var(--teal)' }
+			];
+		}
 		const score = clamp(zone && zone.score, 0, 100);
 		const f0 = (zone && zone.factors0) || defaultFactors(zone);
 		const rainW = 1 + clamp(num(AppState && AppState.rainfallBoost), 0, 60) / 30;
@@ -100,33 +109,90 @@ const Dashboard = (() => {
 		const scale = `<div class="rb-scale"><div class="rb-track"><span class="mon"></span><span class="adv"></span><span class="hi"></span><span class="cr"></span><b class="rb-marker" style="left:${mark}%"><i>${Math.round(mark)}</i></b></div><div class="rb-bands">${bands.map(b => `<span><b>${b[0]}</b> ${b[1]}</span>`).join('')}</div></div>`;
 		el.innerHTML = `<p class="rb-head">SCORE BREAKDOWN <b>${parts.reduce((a, p) => a + p.pts, 0)} / 100</b></p>${rows}${scale}`;
 	}
+	function sparkSeries(zone) {
+		const live = zone && zone._live;
+		const arr = k => (live && Array.isArray(zone[k]) && zone[k].length >= 2) ? zone[k].map(num) : null;
+		const rain = arr('hourlyRainfall'), soil = arr('hourlySoilMoisture'), temp = arr('hourlyTemperature');
+		const acc = rain ? rain.map((_, i) => rain.slice(Math.max(0, i - 23), i + 1).reduce((a, b) => a + b, 0)) : null;
+		return { rain, soil, temp, acc };
+	}
 	function renderSparklines(zone) {
 		const items = document.querySelectorAll('.telemetry-item');
+		const s = sparkSeries(zone);
 		const cfg = [
-			{ el:items[0], now:Math.max(0.1, num(zone.rainfall)), vol:0.20, color:'#c87422' },
-			{ el:items[1], now:Math.max(0.1, num(zone.moisture)), vol:0.08, color:'#c87422' },
-			{ el:items[2], now:Math.max(0.1, num(zone.temperature)), vol:0.05, color:'#378b5b' },
-			{ el:items[3], now:Math.max(0.1, num(zone.accumulated)), vol:0.05, color:'#c87422' }
+			{ el:items[0], series:s.rain, now:Math.max(0.1, num(zone.rainfall)), vol:0.20, color:'#c87422' },
+			{ el:items[1], series:s.soil, now:Math.max(0.1, num(zone.moisture)), vol:0.08, color:'#c87422' },
+			{ el:items[2], series:s.temp, now:Math.max(0.1, num(zone.temperature)), vol:0.05, color:'#378b5b' },
+			{ el:items[3], series:s.acc, now:Math.max(0.1, num(zone.accumulated)), vol:0.05, color:'#c87422' }
 		];
-		cfg.forEach(s => {
-			if (!s.el) return;
-			const spark = s.el.querySelector('.sparkline'); if (!spark) return;
-			const n = 24, pts = [];
-			for (let i = 0; i < n; i++) {
-				const t = i / (n - 1);
-				const base = s.now * (0.72 + 0.28 * t);
-				const noise = Math.sin(i * 1.7 + s.now) * s.now * s.vol * (0.35 + 0.65 * t);
-				pts.push(Math.max(0, base + noise));
+		cfg.forEach(c => {
+			if (!c.el) return;
+			const spark = c.el.querySelector('.sparkline'); if (!spark) return;
+			let pts;
+			if (Array.isArray(c.series) && c.series.length >= 2) {
+				pts = c.series.slice(-24);
+			} else {
+				pts = [];
+				for (let i = 0; i < 24; i++) { const t = i / 23; pts.push(Math.max(0, c.now * (0.72 + 0.28 * t) + Math.sin(i * 1.7 + c.now) * c.now * c.vol * (0.35 + 0.65 * t))); }
 			}
 			const min = Math.min(...pts), max = Math.max(...pts), rng = (max - min) || 1;
 			const W = 100, H = 17;
-			const d = pts.map((v, i) => `${(i / (n - 1) * W).toFixed(1)},${(H - (v - min) / rng * (H - 3) - 1.5).toFixed(1)}`).join(' ');
+			const d = pts.map((v, i) => `${(i / (pts.length - 1) * W).toFixed(1)},${(H - (num(v) - min) / rng * (H - 3) - 1.5).toFixed(1)}`).join(' ');
 			spark.classList.add('spark-svg');
-			spark.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${d}" fill="none" stroke="${s.color}" stroke-width="1.3" vector-effect="non-scaling-stroke"/></svg>`;
+			spark.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><polyline points="${d}" fill="none" stroke="${c.color}" stroke-width="1.3" vector-effect="non-scaling-stroke"/></svg>`;
 		});
+	}
+	function pctBadge(series) {
+		if (!Array.isArray(series) || series.length < 7) return null;
+		const now = num(series[series.length - 1]), past = num(series[series.length - 7]);
+		const pct = past === 0 ? (now === 0 ? 0 : 100) : (now - past) / Math.abs(past) * 100;
+		if (Math.abs(pct) < 2) return { text:'Stable', cls:'steady' };
+		const up = pct > 0;
+		return { text:`${up ? '↑' : '↓'} ${Math.abs(Math.round(pct))}%`, cls: up ? 'up' : 'steady' };
+	}
+	function renderTelemetryMeta(zone, state) {
+		const live = !!(zone && zone._live);
+		if (live) {
+			const s = sparkSeries(zone);
+			const badges = [pctBadge(s.rain), pctBadge(s.soil), pctBadge(s.temp), pctBadge(s.acc)];
+			document.querySelectorAll('.telemetry-item').forEach((it, i) => {
+				const b = it.querySelector('b'); if (!b || !badges[i]) return;
+				b.textContent = badges[i].text;
+				b.className = badges[i].cls;
+			});
+		}
+		const feed = document.querySelector('.telemetry .feed-state');
+		if (feed) {
+			if (live && state && state.weatherFetchedAt) {
+				const t = new Date(state.weatherFetchedAt).toLocaleTimeString('en-IN', { hour12:false, hour:'2-digit', minute:'2-digit' });
+				feed.innerHTML = `<i class="dot green"></i> LIVE · Open-Meteo · Last fetched ${t}`;
+			} else {
+				feed.innerHTML = `<i class="dot green"></i> FEED HEALTHY`;
+			}
+		}
+		const srcStatus = $('src-telemetry-status'), srcSub = $('src-telemetry-sub');
+		if (srcStatus) srcStatus.textContent = live ? 'LIVE' : 'SIMULATED';
+		if (srcSub) srcSub.textContent = live ? 'Open-Meteo Weather API — updated hourly' : 'Rainfall, moisture, temperature';
 	}
 	function renderForecast(zone) {
 		const cells = document.querySelectorAll('.forecast-values strong');
+		if (zone && zone._live && Array.isArray(zone.forecastRainfall) && zone.forecastRainfall.length) {
+			const f = zone.forecastRainfall.map(num);
+			const soilNow = num(zone.moisture);
+			const f0 = zone.factors0 || {};
+			const staticPts = Math.round(num(f0.slope, 12)) + Math.round(num(f0.historical, 6));
+			const at = h => {
+				const w = f.slice(0, h);
+				const peak = w.length ? Math.max(...w, num(zone.rainfall)) : num(zone.rainfall);
+				const soilBump = Math.min(12, w.reduce((a, b) => a + b, 0) * 0.35);
+				const rp = Math.round(typeof rainfallPoints === 'function' ? rainfallPoints(peak) : 0);
+				const sp = Math.round(typeof soilPoints === 'function' ? soilPoints(Math.min(100, soilNow + soilBump)) : 0);
+				return clamp(rp + sp + staticPts, 0, 100);
+			};
+			const proj = [at(1), at(3), at(6)];
+			cells.forEach((cell, i) => { if (i > 0 && proj[i - 1] != null) cell.textContent = Math.round(proj[i - 1]); });
+			return;
+		}
 		const proj = [4, 9, 14];
 		cells.forEach((cell, i) => { if (i > 0 && proj[i - 1] != null) cell.textContent = Math.round(clamp(num(zone && zone.score) + proj[i - 1], 0, 100)); });
 	}
