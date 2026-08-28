@@ -47,17 +47,56 @@ const ApiClient = {
 };
 
 const SCENARIO_BOOSTS = { Normal:[0,0], 'Heavy Rain':[18,9], 'Extreme Rain':[42,18], Recovery:[-8,-6] };
-const AppState = window.AppState = { baseline:MockAPI.zones(), zones:MockAPI.zones(), sensors:[], alerts:[], infrastructure:[], exposure:{ type:'FeatureCollection', features:[] }, riskHistory:[], simulationEvents:[], reports:MockAPI.reports(), selectedZoneId:'tawang', scenario:'Normal', rainfallBoost:0, moistureBoost:0, lastUpdated:new Date(), previousZones:MockAPI.zones(), backendConnected:false, mlComparison:null };
+const AppState = window.AppState = { baseline:MockAPI.zones(), zones:MockAPI.zones(), sensors:[], alerts:[], infrastructure:[], exposure:{ type:'FeatureCollection', features:[] }, riskHistory:[], simulationEvents:[], reports:MockAPI.reports(), selectedZoneId:'tawang', scenario:'Normal', rainfallBoost:0, moistureBoost:0, lastUpdated:new Date(), previousZones:MockAPI.zones(), backendConnected:false, mlComparison:null, fieldAdjust:{}, acks:{} };
+// A submitted field report nudges its zone's risk score and model confidence.
+function registerFieldAdjust(report) {
+	const sev = String(report.severity || '').toLowerCase();
+	const obs = String(report.observation || '').toLowerCase();
+	const noMovement = /(no|nil|not any|without)\s+(observed\s+|visible\s+|fresh\s+|sign\s+of\s+)?(movement|slippage|slip|cracks?|displacement|subsidence|settlement)|slope (is )?stable|nothing observed|no change/.test(obs);
+	let dScore, dConf, note;
+	if (noMovement) { dScore = -4; dConf = 8; note = 'no slope movement observed on the ground'; }
+	else if (sev === 'critical') { dScore = 13; dConf = 12; note = 'critical ground observation confirmed by field team'; }
+	else if (sev === 'high') { dScore = 8; dConf = 10; note = 'high-severity ground observation confirmed'; }
+	else { dScore = 3; dConf = 6; note = 'field observation logged'; }
+	const at = new Date().toLocaleTimeString('en-IN', { hour12:false, hour:'2-digit', minute:'2-digit' });
+	AppState.fieldAdjust = AppState.fieldAdjust || {};
+	const prev = AppState.fieldAdjust[report.zone_id] || { score:0, confidence:0 };
+	AppState.fieldAdjust[report.zone_id] = {
+		score: Math.max(-15, Math.min(30, prev.score + dScore)),
+		confidence: Math.min(18, prev.confidence + dConf),
+		at, note, severity: report.severity, location: report.location
+	};
+}
 function normalizeZone(zone) { return { ...zone, score:zone.score ?? zone.risk_score, level:zone.level ?? zone.risk_level, moisture:zone.moisture ?? zone.soil_moisture ?? 0, accumulated:zone.accumulated ?? zone.accumulated_rainfall ?? 0 }; }
 function normalizeReport(report) { return { ...report, time:report.time || (report.timestamp ? new Date(report.timestamp).toLocaleTimeString('en-IN', { hour12:false }) : 'Unknown time') }; }
-function localRisk(zone) { const rainfall = zone.rainfall + AppState.rainfallBoost; const moisture = Math.min(100, zone.moisture + AppState.moistureBoost); const score = Math.round(Math.min(100, zone.base + Math.min(100, rainfall * 1.08 + (zone.accumulated + AppState.rainfallBoost * 1.7) * .08) * .22 + moisture * .16 + zone.slope * .12 + zone.susceptibility * .16 + zone.history * .08)); return { ...zone, rainfall, moisture, accumulated:zone.accumulated + AppState.rainfallBoost * 1.7, score, level:score >= 75 ? 'Critical' : score >= 55 ? 'High' : score >= 35 ? 'Advisory' : 'Monitoring' }; }
+function localRisk(zone) { const rainfall = zone.rainfall + AppState.rainfallBoost; const moisture = Math.min(100, zone.moisture + AppState.moistureBoost); let score = Math.round(Math.min(100, Math.max(0, zone.score + AppState.rainfallBoost * (0.38 + zone.susceptibility / 500) + AppState.moistureBoost * 0.35))); const adj = (AppState.fieldAdjust || {})[zone.id]; let confidence = zone.confidence; if (adj) { score = Math.max(0, Math.min(100, score + adj.score)); confidence = Math.min(99, Math.round(zone.confidence + adj.confidence)); } return { ...zone, rainfall, moisture, accumulated:zone.accumulated + AppState.rainfallBoost * 1.7, score, confidence, level:score >= 75 ? 'Critical' : score >= 55 ? 'High' : score >= 35 ? 'Advisory' : 'Monitoring', fieldAdjust:adj || null }; }
 function renderState() { AppState.lastUpdated = new Date(); Dashboard.render(AppState); MapView.render(AppState); }
 async function bootstrap() { let weatherSyncFailed = false; try { try { await ApiClient.syncOpenMeteo(); } catch (error) { weatherSyncFailed = true; console.warn('Live weather sync unavailable; loading API data without refresh.', error); } const [zones, sensors, alertPayload, reports, infrastructure, exposure, riskHistory, simulation] = await Promise.all([ApiClient.zones(), ApiClient.sensors(), ApiClient.alerts(), ApiClient.reports(), ApiClient.infrastructure(), ApiClient.exposure(), ApiClient.riskHistory(), ApiClient.simulationHistory()]); AppState.baseline = zones.map(normalizeZone); AppState.zones = await Promise.all(AppState.baseline.map(async zone => normalizeZone(await ApiClient.risk(zone.id, AppState.scenario)))); const selected = AppState.zones.find(zone => zone.id === AppState.selectedZoneId) || AppState.zones[0]; AppState.mlComparison = await ApiClient.mlCompare(selected); AppState.sensors = sensors; AppState.alerts = alertPayload.alerts || []; AppState.reports = reports.map(normalizeReport); AppState.infrastructure = infrastructure; AppState.exposure = exposure; AppState.riskHistory = riskHistory; AppState.simulationEvents = simulation.events || []; AppState.backendConnected = true; showToast(weatherSyncFailed ? 'Connected to Flask API; live weather sync unavailable.' : 'Connected to Flask monitoring API.'); } catch (error) { AppState.backendConnected = false; AppState.zones = AppState.baseline.map(localRisk); showToast('Offline prototype mode: using local fallback data.'); } renderState(); }
 async function selectZone(id) { AppState.previousZones = AppState.zones.map(zone => ({ ...zone })); AppState.selectedZoneId = id; if (AppState.backendConnected) { try { const [result, exposure] = await Promise.all([ApiClient.risk(id, AppState.scenario), ApiClient.exposure(id)]); AppState.zones = AppState.zones.map(zone => zone.id === id ? { ...zone, ...normalizeZone(result) } : zone); AppState.exposure = exposure; } catch (error) { AppState.zones = AppState.zones.map(localRisk); } } renderState(); }
 async function applyScenario(scenario) { const [rainfallBoost, moistureBoost] = SCENARIO_BOOSTS[scenario] || SCENARIO_BOOSTS.Normal; AppState.previousZones = AppState.zones.map(zone => ({ ...zone })); AppState.scenario = scenario; AppState.rainfallBoost = rainfallBoost; AppState.moistureBoost = moistureBoost; if (AppState.backendConnected) { try { const result = await ApiClient.simulation(scenario); AppState.zones = result.results.map(normalizeZone); AppState.riskHistory = await ApiClient.riskHistory(); AppState.alerts = (await ApiClient.alerts()).alerts || []; AppState.simulationEvents = (await ApiClient.simulationHistory()).events || []; renderState(); showToast(`${scenario} loaded from Flask risk engine.`); return; } catch (error) { AppState.backendConnected = false; } } AppState.zones = AppState.baseline.map(localRisk); renderState(); showToast(`${scenario} applied in offline prototype mode.`); }
-async function submitReport(report) { if (AppState.backendConnected) { try { await ApiClient.createReport(report); AppState.reports = (await ApiClient.reports()).map(normalizeReport); return; } catch (error) { AppState.backendConnected = false; } } MockAPI.addReport(report); AppState.reports = MockAPI.reports(); }
+async function submitReport(report) {
+	if (AppState.backendConnected) {
+		try {
+			await ApiClient.createReport(report);
+			AppState.reports = (await ApiClient.reports()).map(normalizeReport);
+			registerFieldAdjust(report);
+			AppState.previousZones = AppState.zones.map(z => ({ ...z }));
+			AppState.zones = AppState.zones.map(localRisk);
+			AppState._fieldPending = true;
+			return;
+		} catch (error) { AppState.backendConnected = false; }
+	}
+	report.time = report.time || (new Date().toLocaleTimeString('en-IN', { hour12:false }) + ' IST');
+	MockAPI.addReport(report);
+	AppState.reports = MockAPI.reports();
+	registerFieldAdjust(report);
+	AppState.previousZones = AppState.zones.map(z => ({ ...z }));
+	AppState.zones = AppState.baseline.map(localRisk);
+	AppState._fieldPending = true;
+	AppState._skipJitterUntil = Date.now() + 9000;
+}
 function showToast(message) { const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 3000); }
 let realtimeFailures = 0;
 function connectRealtimeStream() { if (typeof EventSource === 'undefined') return; const source = new EventSource(`${API_BASE}/api/events`); source.onopen = () => { realtimeFailures = 0; }; source.addEventListener('telemetry', () => bootstrap()); source.onerror = () => { source.close(); realtimeFailures += 1; if (realtimeFailures <= 4) setTimeout(connectRealtimeStream, 5000); else console.info('Live event stream unavailable on this host; using periodic polling instead.'); }; }
-function switchView(view) { document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === view)); document.querySelectorAll('.view').forEach(item => item.classList.toggle('active', item.dataset.section === view)); if (view === 'intelligence') Dashboard.renderIntelligence(AppState); if (view === 'alerts') Dashboard.renderAlertsPage(AppState); if (view === 'reports') Dashboard.renderReports(AppState); }
-document.addEventListener('DOMContentLoaded', () => { Dashboard.init({ selectZone, applyScenario, switchView, showToast, submitReport, updateReport: async (id, status) => { await ApiClient.updateReport(id, status); AppState.reports = (await ApiClient.reports()).map(normalizeReport); renderState(); showToast(`Report marked ${status}.`); } }); MapView.init(selectZone); bootstrap(); connectRealtimeStream(); setInterval(() => { if (AppState.backendConnected) bootstrap(); else if (AppState.scenario === 'Normal') { AppState.baseline = AppState.baseline.map(zone => ({ ...zone, rainfall:Math.max(0, zone.rainfall + (Math.random() - .5) * .8), moisture:Math.max(0, zone.moisture + (Math.random() - .5) * .25) })); AppState.zones = AppState.baseline.map(localRisk); renderState(); } }, 7000); });
+function switchView(view) { document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === view)); document.querySelectorAll('.view').forEach(item => item.classList.toggle('active', item.dataset.section === view)); if (view === 'dashboard') { AppState._fieldPending = false; Dashboard.render(AppState); } if (view === 'intelligence') Dashboard.renderIntelligence(AppState); if (view === 'alerts') Dashboard.renderAlertsPage(AppState); if (view === 'reports') Dashboard.renderReports(AppState); }
+document.addEventListener('DOMContentLoaded', () => { Dashboard.init({ selectZone, applyScenario, switchView, showToast, submitReport, updateReport: async (id, status) => { await ApiClient.updateReport(id, status); AppState.reports = (await ApiClient.reports()).map(normalizeReport); renderState(); showToast(`Report marked ${status}.`); } }); MapView.init(selectZone); bootstrap(); connectRealtimeStream(); setInterval(() => { if (AppState.backendConnected) bootstrap(); else if (AppState.scenario === 'Normal' && Date.now() > (AppState._skipJitterUntil || 0)) { AppState.previousZones = AppState.zones.map(z => ({ ...z })); AppState.baseline = AppState.baseline.map(zone => ({ ...zone, rainfall:Math.max(0, zone.rainfall + (Math.random() - .5) * .8), moisture:Math.max(0, zone.moisture + (Math.random() - .5) * .25) })); AppState.zones = AppState.baseline.map(localRisk); renderState(); } }, 7000); });
