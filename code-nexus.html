@@ -81,13 +81,13 @@
 .rb-scale { margin-top:11px; }
 .rb-track { position:relative; display:flex; height:8px; border-radius:4px; overflow:hidden; }
 .rb-track span { display:block; }
-.rb-track .mon { width:30%; background:#4d9d69; }
-.rb-track .adv { width:20%; background:#d5a03b; }
-.rb-track .hi  { width:25%; background:#d36c36; }
+.rb-track .mon { width:36%; background:#4d9d69; }
+.rb-track .adv { width:18%; background:#d5a03b; }
+.rb-track .hi  { width:21%; background:#d36c36; }
 .rb-track .cr  { width:25%; background:#d34438; }
 .rb-marker { position:absolute; top:-4px; width:2px; height:16px; background:#20353c; transform:translateX(-1px); transition:left .5s ease; }
 .rb-marker i { position:absolute; left:50%; bottom:18px; transform:translateX(-50%); padding:1px 4px; border-radius:3px; background:#20353c; color:#fff; font:600 10px 'Barlow Condensed'; }
-.rb-bands { display:grid; grid-template-columns:30% 20% 25% 25%; margin-top:6px; color:#7e9195; font-size:8.5px; }
+.rb-bands { display:grid; grid-template-columns:36% 18% 21% 25%; margin-top:6px; color:#7e9195; font-size:8.5px; }
 .rb-bands span b { color:#4a6067; font:600 9px 'Barlow Condensed'; }
 .field-verify { margin:10px 0 0; padding:8px 10px; border-left:3px solid var(--teal); background:#eef7f6; color:#2c5b62; font-size:10.5px; line-height:1.4; }
 .field-verify b { color:#12525b; font:600 10px 'Barlow Condensed'; letter-spacing:.5px; }
@@ -221,7 +221,8 @@ const MapView = (() => {
     let selectZone;
     let activeMode = 'risk';
     const layers = {};
-    const color = zone => zone.level === 'Critical' ? '#d34438' : zone.level === 'High' ? '#d36c36' : zone.level === 'Advisory' ? '#d5a03b' : '#4d9d69';
+    const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+    const color = zone => (zone && zone.level) === 'Critical' ? '#d34438' : (zone && zone.level) === 'High' ? '#d36c36' : (zone && zone.level) === 'Advisory' ? '#d5a03b' : '#4d9d69';
 
     function init(selectCallback) {
         selectZone = selectCallback;
@@ -253,7 +254,7 @@ const MapView = (() => {
     }
 
     function resize() { if (map) requestAnimationFrame(() => map.invalidateSize({ animate:false })); }
-    function drawRainfall(zone, windowName) { const multiplier = windowName === 'monsoon' ? 1.55 : windowName === '7d' ? 1.2 : 1; const radius = Math.max(400, Math.min(2600, zone.rainfall * 28 * multiplier)); L.circle(zone.coordinates, { radius, color:'#e07b38', weight:2, dashArray:'6 7', fillColor:'#e07b38', fillOpacity:.11, className:'rainfall-ring' }).addTo(overlayLayer); }
+    function drawRainfall(zone, windowName) { const multiplier = windowName === 'monsoon' ? 1.55 : windowName === '7d' ? 1.2 : 1; const radius = Math.max(400, Math.min(2600, Math.max(0, num(zone.rainfall)) * 28 * multiplier)); L.circle(zone.coordinates, { radius, color:'#e07b38', weight:2, dashArray:'6 7', fillColor:'#e07b38', fillOpacity:.11, className:'rainfall-ring' }).addTo(overlayLayer); }
     function drawExposure(state) { (state.exposure?.features || []).filter(feature => feature.properties?.feature_type === 'infrastructure').forEach(feature => { const [longitude, latitude] = feature.geometry.coordinates; L.circleMarker([latitude, longitude], { radius:7, color:'#f0a33c', fillColor:'#fff4c2', fillOpacity:.95, weight:2 }).bindTooltip(feature.properties.name || 'Exposed asset').addTo(overlayLayer); }); }
     function drawEvacuationRoutes(zone) { const [latitude, longitude] = zone.coordinates; L.polyline([[latitude - .06, longitude - .08], [latitude - .025, longitude - .025], [latitude, longitude]], { color:'#4b9f91', weight:4, dashArray:'10 8', opacity:.9 }).bindTooltip('Prototype evacuation route').addTo(overlayLayer); }
 
@@ -268,7 +269,7 @@ const MapView = (() => {
         (state.zones || []).filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length === 2 && zone.coordinates.every(Number.isFinite)).forEach(zone => {
             const selectedZone = zone.id === state.selectedZoneId;
             const marker = L.circleMarker(zone.coordinates, { radius:selectedZone ? 10 : 7, color:color(zone), fillColor:color(zone), fillOpacity:.9, weight:selectedZone ? 3 : 2, className: zone.level === 'Critical' || zone.level === 'High' ? 'risk-pulse' : '' });
-            marker.bindTooltip(`<strong>${zone.name}</strong><br>${zone.level} · Score ${zone.score}`);
+            marker.bindTooltip(`<strong>${zone.name}</strong><br>${zone.level || 'Monitoring'} · Score ${Math.round(num(zone.score))}`);
             marker.on('click', () => selectZone(zone.id));
             marker.addTo(zoneLayer);
         });
@@ -280,7 +281,7 @@ const MapView = (() => {
         if (selected.id !== map._selectedZone) map._selectedZone = selected.id;
     }
 
-    function renderLocationSwitcher(state) { const switcher = document.getElementById('map-location-switcher'); if (!switcher) return; switcher.innerHTML = state.zones.map(zone => `<button class="map-place ${zone.id === state.selectedZoneId ? 'active' : ''}" data-map-zone="${zone.id}"><i class="place-dot" style="background:${color(zone)}"></i><span>${zone.name}</span><b>${zone.score}</b></button>`).join(''); switcher.querySelectorAll('[data-map-zone]').forEach(button => button.addEventListener('click', () => selectZone(button.dataset.mapZone))); }
+    function renderLocationSwitcher(state) { const switcher = document.getElementById('map-location-switcher'); if (!switcher) return; switcher.innerHTML = state.zones.map(zone => `<button class="map-place ${zone.id === state.selectedZoneId ? 'active' : ''}" data-map-zone="${zone.id}"><i class="place-dot" style="background:${color(zone)}"></i><span>${zone.name || '—'}</span><b>${Math.round(num(zone.score))}</b></button>`).join(''); switcher.querySelectorAll('[data-map-zone]').forEach(button => button.addEventListener('click', () => selectZone(button.dataset.mapZone))); }
     function renderMode(mode) { const label = document.getElementById('active-layer'); if (label) label.textContent = `${mode.toUpperCase()} OVERLAY`; if (window.AppState) render(window.AppState); }
     return { init, render };
 })();
@@ -449,8 +450,8 @@ const MapView = (() => {
 const Dashboard = (() => {
 	let actions;
 	const $ = id => document.getElementById(id);
-	const current = state => state.zones.find(zone => zone.id === state.selectedZoneId) || state.zones[0];
-	const levelClass = level => level.toLowerCase();
+	const current = state => (state && state.zones || []).find(zone => zone.id === state.selectedZoneId) || (state && state.zones || [])[0] || null;
+	const levelClass = level => String(level || 'monitoring').toLowerCase();
 	function init(callbacks) {
 		actions = callbacks;
 		document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => actions.switchView(item.dataset.view)));
@@ -458,21 +459,73 @@ const Dashboard = (() => {
 		$('demo-button').addEventListener('click', runDemo); $('refresh-button').addEventListener('click', () => actions.applyScenario('Normal')); $('zone-details-button').addEventListener('click', () => actions.switchView('intelligence')); $('report-form').addEventListener('submit', submitReport); if (!$('report-media')) { const label = document.createElement('label'); label.textContent = 'EVIDENCE PHOTO / VIDEO'; label.innerHTML += '<input id="report-media" type="file" accept="image/*,video/*">'; $('report-form').insertBefore(label, $('report-form').querySelector('.brief-action')); } if (!$('ai-comparison')) { const panel = document.createElement('section'); panel.id = 'ai-comparison'; panel.className = 'ai-comparison panel'; panel.innerHTML = '<div class="section-head"><div><p class="kicker">DECISION SUPPORT</p><h2>AI vs baseline</h2></div><span id="ai-review-badge" class="comparison-badge">SYNCING</span></div><div id="ai-comparison-body"></div>'; document.querySelector('.incident-brief')?.after(panel); }
 	}
 	function runDemo() { const button = $('demo-button'); button.disabled = true; button.innerHTML = '<span>●</span> Monitoring escalation'; actions.applyScenario('Normal'); setTimeout(() => actions.applyScenario('Heavy Rain'), 1500); setTimeout(() => actions.applyScenario('Extreme Rain'), 3300); setTimeout(() => { button.disabled = false; button.innerHTML = '<span>▶</span> Run escalation demo'; }, 5100); }
-	function animateNumber(element, value, decimals = 0) { const start = Number(element.dataset.value || element.textContent.replace(/[^0-9.-]/g, '')) || 0; const end = Number(value); if (Math.abs(start - end) < .01) return; const began = performance.now(); element.classList.add('changing'); const tick = now => { const progress = Math.min(1, (now - began) / 600); const eased = 1 - Math.pow(1 - progress, 3); element.textContent = decimals ? (start + (end - start) * eased).toFixed(decimals) : Math.round(start + (end - start) * eased); element.dataset.value = end; if (progress < 1) requestAnimationFrame(tick); else element.classList.remove('changing'); }; requestAnimationFrame(tick); }
-	function animateGauge(element, score) { const start = Number(element.dataset.score || 0); const began = performance.now(); const tick = now => { const progress = Math.min(1, (now - began) / 700); const eased = 1 - Math.pow(1 - progress, 3); const value = start + (score - start) * eased; element.style.background = `conic-gradient(${score >= 75 ? 'var(--red)' : score >= 55 ? 'var(--orange)' : 'var(--amber)'} 0 ${value}%, #e2ebea ${value}% 100%)`; element.dataset.score = value; if (progress < 1) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
-	function render(state) { const zone = current(state); const previous = (state.previousZones || []).find(item => item.id === zone.id) || zone; const regional = Math.round(state.zones.reduce((sum, item) => sum + item.score, 0) / state.zones.length); $('updated-time').textContent = state.lastUpdated.toLocaleTimeString('en-IN', { hour12:false }); $('clock').textContent = `${state.lastUpdated.toLocaleTimeString('en-IN', { hour12:false })} IST`; animateNumber($('regional-risk'), regional); animateNumber($('active-alerts'), state.alerts.length || state.zones.filter(item => item.score >= 55).length); $('regional-status').textContent = regional >= 75 ? 'CRITICAL' : regional >= 55 ? 'HIGH' : regional >= 35 ? 'ADVISORY' : 'MONITORING'; $('highest-priority').textContent = state.zones.slice().sort((a,b) => b.score - a.score)[0].name.split(' ')[0].toUpperCase(); $('selected-zone-name').textContent = zone.name; $('selected-location').textContent = zone.district; $('selected-level').textContent = zone.level.toUpperCase(); $('selected-level').className = `level-badge ${levelClass(zone.level)}`; animateNumber($('selected-score'), zone.score); animateGauge($('score-ring'), zone.score); $('risk-reading').textContent = `${zone.level.toUpperCase()} RISK`; $('risk-reading').style.color = zone.level === 'Critical' ? 'var(--red)' : zone.level === 'High' ? 'var(--orange)' : 'var(--amber)'; $('selected-confidence').textContent = `${zone.confidence}%`; $('confidence-bar-fill').style.width = `${zone.confidence}%`; animateNumber($('rainfall-value'), zone.rainfall, 1); animateNumber($('moisture-value'), zone.moisture); animateNumber($('temperature-value'), zone.temperature, 1); animateNumber($('accumulated-value'), zone.accumulated + state.rainfallBoost * 1.7); $('forecast-now').textContent = zone.score; $('coordinates').textContent = `${zone.coordinates[0].toFixed(4)}° N, ${zone.coordinates[1].toFixed(4)}° E`; $('risk-explanation').textContent = explanation(zone); renderBreakdown(zone); renderSparklines(zone); renderForecast(zone); renderFieldVerify(zone); renderComparison(state); const feed = document.querySelector('.nav-feed'); if (feed) feed.innerHTML = `<i class="dot ${state.backendConnected ? 'green' : 'cyan'}"></i> ${state.backendConnected ? 'Flask API connected' : 'Offline prototype mode'}`; renderChanges(zone, previous, state); renderExposure(zone); renderZones(state); renderAlerts(state); renderPriority(state); renderReports(state); }
-	function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-	function breakdownParts(zone) {
+	const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+	function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, num(v))); }
+	function levelOf(score) { const s = num(score); return s >= 75 ? 'Critical' : s >= 55 ? 'High' : s >= 36 ? 'Advisory' : 'Monitoring'; }
+	function safeLevel(zone) { return zone && typeof zone.level === 'string' ? zone.level : levelOf(zone && zone.score); }
+	function animateNumber(element, value, decimals = 0) { if (!element) return; const start = num(element.dataset.value ?? String(element.textContent).replace(/[^0-9.-]/g, '')); const end = num(value); if (!Number.isFinite(end)) { element.textContent = decimals ? (0).toFixed(decimals) : '0'; element.dataset.value = 0; return; } if (Math.abs(start - end) < .01) { element.textContent = decimals ? end.toFixed(decimals) : Math.round(end); element.dataset.value = end; return; } const began = performance.now(); element.classList.add('changing'); const tick = now => { const progress = Math.min(1, (now - began) / 600); const eased = 1 - Math.pow(1 - progress, 3); element.textContent = decimals ? (start + (end - start) * eased).toFixed(decimals) : Math.round(start + (end - start) * eased); element.dataset.value = end; if (progress < 1) requestAnimationFrame(tick); else element.classList.remove('changing'); }; requestAnimationFrame(tick); }
+	function animateGauge(element, score) { if (!element) return; const target = clamp(score, 0, 100); const start = num(element.dataset.score); const began = performance.now(); const tick = now => { const progress = Math.min(1, (now - began) / 700); const eased = 1 - Math.pow(1 - progress, 3); const value = clamp(start + (target - start) * eased, 0, 100); element.style.background = `conic-gradient(${target >= 75 ? 'var(--red)' : target >= 55 ? 'var(--orange)' : 'var(--amber)'} 0 ${value}%, #e2ebea ${value}% 100%)`; element.dataset.score = value; if (progress < 1) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+	function render(state) {
+		const zones = (state.zones || []).map(z => ({ ...z, score: num(z && z.score), confidence: num(z && z.confidence, 75), level: safeLevel(z) }));
+		const zone = zones.find(z => z.id === state.selectedZoneId) || zones[0] || { name:'—', district:'—', score:0, confidence:0, level:'Monitoring', coordinates:[0,0] };
+		const previous = (state.previousZones || []).find(item => item.id === zone.id) || zone;
+		const regional = zones.length ? Math.round(zones.reduce((sum, item) => sum + num(item.score), 0) / zones.length) : 0;
+		const activeAlerts = (state.alerts && state.alerts.length) ? state.alerts.length : zones.filter(item => item.level === 'High' || item.level === 'Critical').length;
+		$('updated-time').textContent = state.lastUpdated.toLocaleTimeString('en-IN', { hour12:false });
+		$('clock').textContent = `${state.lastUpdated.toLocaleTimeString('en-IN', { hour12:false })} IST`;
+		animateNumber($('regional-risk'), regional);
+		animateNumber($('active-alerts'), activeAlerts);
+		$('regional-status').textContent = levelOf(regional).toUpperCase();
+		const top = zones.slice().sort((a, b) => num(b.score) - num(a.score))[0];
+		$('highest-priority').textContent = (top && top.name ? top.name : '—').split(' ')[0].toUpperCase();
+		$('selected-zone-name').textContent = zone.name || '—';
+		$('selected-location').textContent = zone.district || '—';
+		$('selected-level').textContent = zone.level.toUpperCase();
+		$('selected-level').className = `level-badge ${levelClass(zone.level)}`;
+		animateNumber($('selected-score'), zone.score);
+		animateGauge($('score-ring'), zone.score);
+		$('risk-reading').textContent = `${zone.level.toUpperCase()} RISK`;
+		$('risk-reading').style.color = zone.level === 'Critical' ? 'var(--red)' : zone.level === 'High' ? 'var(--orange)' : 'var(--amber)';
+		$('selected-confidence').textContent = `${Math.round(num(zone.confidence, 0))}%`;
+		$('confidence-bar-fill').style.width = `${clamp(num(zone.confidence, 0), 0, 100)}%`;
+		animateNumber($('rainfall-value'), num(zone.rainfall), 1);
+		animateNumber($('moisture-value'), num(zone.moisture));
+		animateNumber($('temperature-value'), num(zone.temperature), 1);
+		animateNumber($('accumulated-value'), num(zone.accumulated) + num(state.rainfallBoost) * 1.7);
+		$('forecast-now').textContent = Math.round(num(zone.score));
+		const co = Array.isArray(zone.coordinates) ? zone.coordinates : [0, 0];
+		$('coordinates').textContent = `${num(co[0]).toFixed(4)}° N, ${num(co[1]).toFixed(4)}° E`;
+		$('risk-explanation').textContent = explanation(zone);
+		renderBreakdown(zone); renderSparklines(zone); renderForecast(zone); renderFieldVerify(zone); renderComparison({ ...state, zones });
+		const feed = document.querySelector('.nav-feed'); if (feed) feed.innerHTML = `<i class="dot ${state.backendConnected ? 'green' : 'cyan'}"></i> ${state.backendConnected ? 'Flask API connected' : 'Offline prototype mode'}`;
+		renderChanges(zone, previous, state); renderExposure(zone); renderZones({ ...state, zones }); renderAlerts({ ...state, zones }); renderPriority({ ...state, zones }); renderReports(state);
+	}
+	function defaultFactors(zone) {
+		const s = clamp(zone && zone.score, 0, 100);
 		const raw = [
-			Math.min(72, zone.rainfall) * 1.15,
-			zone.moisture * 0.62,
-			((zone.slope + zone.susceptibility) / 2) * 0.42,
-			zone.history * 0.34
+			Math.max(1, num(zone && zone.rainfall)),
+			Math.max(1, num(zone && (zone.moisture ?? zone.soil_moisture)) * 0.6),
+			Math.max(1, ((num(zone && zone.slope) + num(zone && zone.susceptibility)) / 2) * 0.5),
+			Math.max(1, num(zone && zone.history) * 0.4)
+		];
+		const t = raw.reduce((a, b) => a + b, 0) || 1;
+		return { rainfall: raw[0] / t * s, soil: raw[1] / t * s, slope: raw[2] / t * s, historical: raw[3] / t * s };
+	}
+	function breakdownParts(zone) {
+		const score = clamp(zone && zone.score, 0, 100);
+		const f0 = (zone && zone.factors0) || defaultFactors(zone);
+		const rainW = 1 + clamp(num(AppState && AppState.rainfallBoost), 0, 60) / 30;
+		const soilW = 1 + clamp(num(AppState && AppState.moistureBoost), 0, 40) / 30;
+		const raw = [
+			num(f0.rainfall) * rainW,
+			num(f0.soil) * soilW,
+			num(f0.slope),
+			num(f0.historical)
 		];
 		const total = raw.reduce((a, b) => a + b, 0) || 1;
-		const scaled = raw.map(v => v / total * zone.score);
-		const ints = scaled.map(Math.round);
-		let diff = Math.round(zone.score) - ints.reduce((a, b) => a + b, 0);
+		const scaled = raw.map(v => v / total * score);
+		const ints = scaled.map(v => Math.max(0, Math.round(v)));
+		let diff = Math.round(score) - ints.reduce((a, b) => a + b, 0);
 		const order = ints.map((_, i) => i).sort((a, b) => scaled[b] - scaled[a]);
 		for (let k = 0; diff !== 0 && k < order.length * 6; k++) {
 			const i = order[k % order.length];
@@ -491,18 +544,18 @@ const Dashboard = (() => {
 		el.className = 'factors risk-breakdown';
 		const parts = breakdownParts(zone);
 		const rows = parts.map(p => `<div class="rb-row"><span class="rb-label">${p.label}</span><span class="rb-val">${p.pts} pts</span><i class="rb-bar"><em style="width:${clamp(p.pts / 40 * 100, 2, 100)}%;background:${p.color}"></em></i></div>`).join('');
-		const bands = [['0–30', 'Monitoring'], ['31–50', 'Advisory'], ['51–75', 'High'], ['76–100', 'Critical']];
-		const mark = clamp(Math.round(zone.score), 0, 100);
-		const scale = `<div class="rb-scale"><div class="rb-track"><span class="mon"></span><span class="adv"></span><span class="hi"></span><span class="cr"></span><b class="rb-marker" style="left:${mark}%"><i>${Math.round(zone.score)}</i></b></div><div class="rb-bands">${bands.map(b => `<span><b>${b[0]}</b> ${b[1]}</span>`).join('')}</div></div>`;
+		const bands = [['0–35', 'Monitoring'], ['36–54', 'Advisory'], ['55–74', 'High'], ['75–100', 'Critical']];
+		const mark = clamp(zone && zone.score, 0, 100);
+		const scale = `<div class="rb-scale"><div class="rb-track"><span class="mon"></span><span class="adv"></span><span class="hi"></span><span class="cr"></span><b class="rb-marker" style="left:${mark}%"><i>${Math.round(mark)}</i></b></div><div class="rb-bands">${bands.map(b => `<span><b>${b[0]}</b> ${b[1]}</span>`).join('')}</div></div>`;
 		el.innerHTML = `<p class="rb-head">SCORE BREAKDOWN <b>${parts.reduce((a, p) => a + p.pts, 0)} / 100</b></p>${rows}${scale}`;
 	}
 	function renderSparklines(zone) {
 		const items = document.querySelectorAll('.telemetry-item');
 		const cfg = [
-			{ el:items[0], now:zone.rainfall, vol:0.20, color:'#c87422' },
-			{ el:items[1], now:zone.moisture, vol:0.08, color:'#c87422' },
-			{ el:items[2], now:zone.temperature, vol:0.05, color:'#378b5b' },
-			{ el:items[3], now:zone.accumulated, vol:0.05, color:'#c87422' }
+			{ el:items[0], now:Math.max(0.1, num(zone.rainfall)), vol:0.20, color:'#c87422' },
+			{ el:items[1], now:Math.max(0.1, num(zone.moisture)), vol:0.08, color:'#c87422' },
+			{ el:items[2], now:Math.max(0.1, num(zone.temperature)), vol:0.05, color:'#378b5b' },
+			{ el:items[3], now:Math.max(0.1, num(zone.accumulated)), vol:0.05, color:'#c87422' }
 		];
 		cfg.forEach(s => {
 			if (!s.el) return;
@@ -524,14 +577,14 @@ const Dashboard = (() => {
 	function renderForecast(zone) {
 		const cells = document.querySelectorAll('.forecast-values strong');
 		const proj = [4, 9, 14];
-		cells.forEach((cell, i) => { if (i > 0 && proj[i - 1] != null) cell.textContent = clamp(Math.round(zone.score) + proj[i - 1], 0, 100); });
+		cells.forEach((cell, i) => { if (i > 0 && proj[i - 1] != null) cell.textContent = Math.round(clamp(num(zone && zone.score) + proj[i - 1], 0, 100)); });
 	}
 	function renderFieldVerify(zone) {
 		const fv = $('field-verify'); if (!fv) return;
 		if (zone.fieldAdjust) {
 			fv.hidden = false;
-			const sign = zone.fieldAdjust.score >= 0 ? '+' : '';
-			fv.innerHTML = `<b>Adjusted by field verification at ${zone.fieldAdjust.at}</b> — ${zone.fieldAdjust.note} (${sign}${zone.fieldAdjust.score} to score, +${zone.fieldAdjust.confidence} confidence)`;
+			const ds = num(zone.fieldAdjust.score), dc = num(zone.fieldAdjust.confidence);
+			fv.innerHTML = `<b>Adjusted by field verification at ${zone.fieldAdjust.at || '—'}</b> — ${zone.fieldAdjust.note || 'field observation'} (${ds >= 0 ? '+' : ''}${ds} to score, +${dc} confidence)`;
 		} else { fv.hidden = true; }
 	}
 	function explanation(zone) { if (zone.level === 'Critical') return 'Extreme rainfall and near-saturated soil are pushing this steep, susceptible corridor into critical risk.'; if (zone.level === 'High') return 'Heavy rainfall and rising soil saturation are raising risk on highly susceptible terrain.'; return 'Conditions remain below the high-risk threshold while terrain susceptibility and exposure are monitored.'; }
@@ -539,9 +592,9 @@ const Dashboard = (() => {
 		const body = $('ai-comparison-body'); if (!body) return;
 		const comparison = state.mlComparison;
 		if (!comparison) {
-			const z = current(state);
+			const z = current(state) || {};
 			if ($('ai-review-badge')) { $('ai-review-badge').textContent = 'BASELINE'; $('ai-review-badge').className = 'comparison-badge agree'; }
-			body.innerHTML = `<div class="comparison-scores"><span>BASELINE ENGINE <b>${Math.round(z.score)} · ${z.level}</b></span><span>MODEL CONFIDENCE <b>${z.confidence}%</b></span></div><p>Explainable rainfall-trigger engine is active. The learned comparison model runs when the API backend is connected.</p>`;
+			body.innerHTML = `<div class="comparison-scores"><span>BASELINE ENGINE <b>${Math.round(num(z.score))} · ${safeLevel(z)}</b></span><span>MODEL CONFIDENCE <b>${Math.round(num(z.confidence, 0))}%</b></span></div><p>Explainable rainfall-trigger engine is active. The learned comparison model runs when the API backend is connected.</p>`;
 			return;
 		}
 		const model = comparison.model; const baseline = comparison.baseline;
@@ -549,29 +602,31 @@ const Dashboard = (() => {
 		$('ai-review-badge').className = `comparison-badge ${comparison.comparison.agrees ? 'agree' : 'review'}`;
 		body.innerHTML = `<div class="comparison-scores"><span>BASELINE <b>${baseline.risk_score} · ${baseline.risk_level}</b></span><span>AI MODEL <b>${model.prediction} · ${model.confidence}%</b></span></div><p>${model.explanation}</p><div class="ai-drivers">${model.top_drivers.map(driver => `<span>${driver.name}<b>${driver.importance}%</b></span>`).join('')}</div>`;
 	}
-	function factors(zone) { return [{ label:'Rainfall pressure', value:`${Math.min(100, Math.round(zone.rainfall * 1.7))}%`, weight:'+22%' }, { label:'Soil saturation', value:`${Math.round(zone.moisture)}%`, weight:'+16%' }, { label:'Terrain susceptibility', value:`${zone.susceptibility}%`, weight:'+16%' }, { label:'Historical susceptibility', value:`${zone.history}%`, weight:'+8%' }]; }
+	function factors(zone) { return [{ label:'Rainfall pressure', value:`${Math.min(100, Math.round(num(zone.rainfall) * 1.7))}%`, weight:'+22%' }, { label:'Soil saturation', value:`${Math.round(num(zone.moisture))}%`, weight:'+16%' }, { label:'Terrain susceptibility', value:`${Math.round(num(zone.susceptibility))}%`, weight:'+16%' }, { label:'Historical susceptibility', value:`${Math.round(num(zone.history))}%`, weight:'+8%' }]; }
 	function renderChanges(zone, previous, state) {
 		const now = (state && state.lastUpdated) || new Date();
 		const since = new Date(now.getTime() - 15 * 60000).toLocaleTimeString('en-IN', { hour12:false, hour:'2-digit', minute:'2-digit' });
-		const prevScore = (previous && previous.score !== zone.score) ? previous.score : Math.max(0, Math.round(zone.score) - 6);
-		const prevRain = (previous && previous.rainfall && previous.rainfall !== zone.rainfall) ? previous.rainfall : zone.rainfall / 1.18;
-		const rainPct = prevRain > 0 ? Math.round((zone.rainfall - prevRain) / prevRain * 100) : 0;
+		const score = Math.round(num(zone && zone.score));
+		const rainfall = num(zone && zone.rainfall);
+		const prevScore = (previous && Number.isFinite(num(previous.score)) && Math.round(num(previous.score)) !== score) ? Math.round(num(previous.score)) : Math.max(0, score - 6);
+		const prevRain = (previous && num(previous.rainfall) > 0 && num(previous.rainfall) !== rainfall) ? num(previous.rainfall) : (rainfall / 1.18) || 1;
+		const rainPct = prevRain > 0 ? Math.round((rainfall - prevRain) / prevRain * 100) : 0;
 		const reports = (state && state.reports) || [];
 		const line3 = zone.fieldAdjust
 			? { text:`1 new field report from ${zone.fieldAdjust.location} — ${String(zone.fieldAdjust.severity || '').toLowerCase()} severity`, tone:'up' }
 			: { text:`${reports.length} field report${reports.length === 1 ? '' : 's'} in the verification queue`, tone:'steady' };
 		const lines = [
-			{ text:`Risk score ${prevScore} to ${Math.round(zone.score)} since ${since}`, tone: Math.round(zone.score) > prevScore ? 'risk' : (Math.round(zone.score) < prevScore ? 'down' : 'steady') },
+			{ text:`Risk score ${prevScore} to ${score} since ${since}`, tone: score > prevScore ? 'risk' : (score < prevScore ? 'down' : 'steady') },
 			{ text: rainPct >= 0 ? `Rainfall up ${rainPct} percent in the last hour` : `Rainfall down ${Math.abs(rainPct)} percent in the last hour`, tone: rainPct > 0 ? 'up' : 'steady' },
 			line3
 		];
 		$('changes-list').innerHTML = lines.map(l => `<div class="change-line ${l.tone}"><span>▸</span> ${l.text}</div>`).join('');
 	}
-	function renderExposure(zone) { const assets = AppState.infrastructure.filter(asset => asset.zone_id === zone.id); $('exposed-population').textContent = assets.length ? `${(assets.reduce((sum, asset) => sum + asset.population_served, 0) / 1000).toFixed(1)}K` : `${(zone.exposure * .15).toFixed(1)}K`; $('roads-at-risk').textContent = String(assets.filter(asset => asset.type === 'road').length || Math.max(1, Math.round(zone.exposure / 28))).padStart(2,'0'); $('villages-count').textContent = String(assets.filter(asset => asset.type === 'village').length || Math.max(2, Math.round(zone.exposure / 12))).padStart(2,'0'); $('infrastructure-count').textContent = String(assets.filter(asset => asset.criticality === 'Critical' || asset.type === 'bridge').length || Math.max(1, Math.round(zone.exposure / 22))).padStart(2,'0'); }
-	function renderZones(state) { const list = document.getElementById('zone-list'); if (!list) return; list.innerHTML = state.zones.map(zone => `<div class="zone-row ${zone.id === state.selectedZoneId ? 'selected' : ''}" data-zone="${zone.id}"><i class="dot ${levelClass(zone.level)}"></i><span>${zone.name}</span><strong>${zone.score}</strong></div>`).join(''); document.querySelectorAll('[data-zone]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zone))); }
+	function renderExposure(zone) { const exposure = num(zone && zone.exposure); const assets = (AppState.infrastructure || []).filter(asset => asset.zone_id === (zone && zone.id)); $('exposed-population').textContent = assets.length ? `${(assets.reduce((sum, asset) => sum + num(asset.population_served), 0) / 1000).toFixed(1)}K` : `${(exposure * .15).toFixed(1)}K`; $('roads-at-risk').textContent = String(assets.filter(asset => asset.type === 'road').length || Math.max(1, Math.round(exposure / 28))).padStart(2,'0'); $('villages-count').textContent = String(assets.filter(asset => asset.type === 'village').length || Math.max(2, Math.round(exposure / 12))).padStart(2,'0'); $('infrastructure-count').textContent = String(assets.filter(asset => asset.criticality === 'Critical' || asset.type === 'bridge').length || Math.max(1, Math.round(exposure / 22))).padStart(2,'0'); }
+	function renderZones(state) { const list = document.getElementById('zone-list'); if (!list) return; list.innerHTML = (state.zones || []).map(zone => `<div class="zone-row ${zone.id === state.selectedZoneId ? 'selected' : ''}" data-zone="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><strong>${Math.round(num(zone.score))}</strong></div>`).join(''); document.querySelectorAll('[data-zone]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zone))); }
 	function renderAlerts(state) {
 		state.acks = state.acks || {};
-		const alerts = state.alerts.length ? state.alerts : state.zones.filter(zone => zone.score >= 55).map(zone => ({ zone_id:zone.id, level:zone.level, title:`${zone.level} risk detected`, reason:zone.name, risk_score:Math.round(zone.score) }));
+		const alerts = (state.alerts && state.alerts.length) ? state.alerts : (state.zones || []).filter(zone => safeLevel(zone) === 'High' || safeLevel(zone) === 'Critical').map(zone => ({ zone_id:zone.id, level:safeLevel(zone), title:`${safeLevel(zone)} risk detected`, reason:zone.name, risk_score:Math.round(num(zone.score)) }));
 		$('alert-count').textContent = String(alerts.length).padStart(2, '0');
 		$('alert-list').innerHTML = (alerts.length ? alerts : [{ title:'No active escalation', level:'Monitoring', risk_score:0 }]).slice(0, 3).map(alert => {
 			const key = `${alert.zone_id || alert.title}|${alert.level}`;
@@ -589,25 +644,32 @@ const Dashboard = (() => {
 			if (actions && actions.showToast) actions.showToast('Alert acknowledged by Duty Officer.');
 		}));
 	}
-	function renderPriority(state) { const priority = [...state.zones].sort((a,b) => b.score * .65 + b.exposure * .35 - (a.score * .65 + a.exposure * .35)); $('priority-list').innerHTML = priority.slice(0,3).map((zone,index) => `<div class="priority-row"><strong>0${index + 1}</strong><div><b>${zone.name}</b><small>${zone.level.toUpperCase()} · ${zone.exposure}% exposure</small></div><em>${zone.level === 'Critical' || zone.level === 'High' ? 'VERIFY NOW' : 'MONITOR'}</em></div>`).join(''); }
-	function renderIntelligence(state) { $('intelligence-zone-list').innerHTML = state.zones.map(zone => `<div class="intelligence-zone" data-zone-intel="${zone.id}"><i class="dot ${levelClass(zone.level)}"></i><span>${zone.name}</span><b>${zone.score}</b></div>`).join(''); document.querySelectorAll('[data-zone-intel]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zoneIntel))); const zone = current(state); $('intelligence-detail').innerHTML = `<p class="kicker">SELECTED ZONE / ${zone.district.toUpperCase()}</p><h2>${zone.name}</h2><p>${explanation(zone)}</p><div class="factor-list">${factors(zone).map(item => `<div class="factor"><span>${item.label}</span><strong>${item.value}<b>${item.weight}</b></strong></div>`).join('')}</div>`; }
-	function renderAlertsPage(state) { $('all-alerts').innerHTML = state.zones.map(zone => `<div class="all-alert-row"><i class="dot ${levelClass(zone.level)}"></i><div><strong>${zone.name}</strong><small>Risk ${zone.score} · ${zone.rainfall.toFixed(1)} mm/hr · ${Math.round(zone.moisture)}% soil moisture</small></div><b>${zone.level.toUpperCase()}</b></div>`).join(''); $('all-priority').innerHTML = state.zones.slice().sort((a,b) => b.score - a.score).map((zone,index) => `<div class="all-alert-row"><strong>0${index+1}</strong><div><strong>${zone.name}</strong><small>${zone.exposure}% exposure</small></div><b>${zone.level === 'Critical' || zone.level === 'High' ? 'IMMEDIATE VERIFICATION' : 'MONITOR'}</b></div>`).join(''); }
-	function renderReports(state) { $('report-list').innerHTML = state.reports.map(report => `<div class="report-row"><div><strong>${report.location}</strong><small>${report.observation}</small><small>${report.time} · ${report.status}</small></div><select class="report-status" data-report-id="${report.id || ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${report.severity.toUpperCase()}</b></div>`).join(''); document.querySelectorAll('.report-status[data-report-id]').forEach(select => select.addEventListener('change', () => actions.updateReport(Number(select.dataset.reportId), select.value))); }
+	function renderPriority(state) { const priority = [...(state.zones || [])].sort((a,b) => (num(b.score) * .65 + num(b.exposure) * .35) - (num(a.score) * .65 + num(a.exposure) * .35)); $('priority-list').innerHTML = priority.slice(0,3).map((zone,index) => { const lvl = safeLevel(zone); return `<div class="priority-row"><strong>0${index + 1}</strong><div><b>${zone.name || '—'}</b><small>${lvl.toUpperCase()} · ${Math.round(num(zone.exposure))}% exposure</small></div><em>${lvl === 'Critical' || lvl === 'High' ? 'VERIFY NOW' : 'MONITOR'}</em></div>`; }).join(''); }
+	function renderIntelligence(state) { $('intelligence-zone-list').innerHTML = (state.zones || []).map(zone => `<div class="intelligence-zone" data-zone-intel="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><b>${Math.round(num(zone.score))}</b></div>`).join(''); document.querySelectorAll('[data-zone-intel]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zoneIntel))); const zone = current(state) || {}; $('intelligence-detail').innerHTML = `<p class="kicker">SELECTED ZONE / ${String(zone.district || '—').toUpperCase()}</p><h2>${zone.name || '—'}</h2><p>${explanation(zone)}</p><div class="factor-list">${factors(zone).map(item => `<div class="factor"><span>${item.label}</span><strong>${item.value}<b>${item.weight}</b></strong></div>`).join('')}</div>`; }
+	function renderAlertsPage(state) { $('all-alerts').innerHTML = (state.zones || []).map(zone => `<div class="all-alert-row"><i class="dot ${levelClass(safeLevel(zone))}"></i><div><strong>${zone.name || '—'}</strong><small>Risk ${Math.round(num(zone.score))} · ${num(zone.rainfall).toFixed(1)} mm/hr · ${Math.round(num(zone.moisture))}% soil moisture</small></div><b>${safeLevel(zone).toUpperCase()}</b></div>`).join(''); $('all-priority').innerHTML = (state.zones || []).slice().sort((a,b) => num(b.score) - num(a.score)).map((zone,index) => { const lvl = safeLevel(zone); return `<div class="all-alert-row"><strong>0${index+1}</strong><div><strong>${zone.name || '—'}</strong><small>${Math.round(num(zone.exposure))}% exposure</small></div><b>${lvl === 'Critical' || lvl === 'High' ? 'IMMEDIATE VERIFICATION' : 'MONITOR'}</b></div>`; }).join(''); }
+	function renderReports(state) { $('report-list').innerHTML = (state.reports || []).map(report => `<div class="report-row"><div><strong>${report.location || '—'}</strong><small>${report.observation || ''}</small><small>${report.time || '—'} · ${report.status || 'Submitted'}</small></div><select class="report-status" data-report-id="${report.id || ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${String(report.severity || 'Advisory').toUpperCase()}</b></div>`).join(''); document.querySelectorAll('.report-status[data-report-id]').forEach(select => select.addEventListener('change', () => actions.updateReport(Number(select.dataset.reportId), select.value))); }
 	async function submitReport(event) { event.preventDefault(); const media = $('report-media').files[0]; const report = { zone_id:AppState.selectedZoneId, location:$('report-location').value, observation:$('report-observation').value || 'Ground observation submitted for review.', severity:$('report-severity').value, timestamp:new Date().toISOString(), status:'Under review', media_type:media ? media.type : null, media_name:media ? media.name : null }; if (navigator.geolocation) await new Promise(resolve => navigator.geolocation.getCurrentPosition(position => { report.latitude = position.coords.latitude; report.longitude = position.coords.longitude; report.accuracy_m = position.coords.accuracy; resolve(); }, resolve, { enableHighAccuracy:true, timeout:5000, maximumAge:60000 })); await actions.submitReport(report); $('report-form').reset(); renderReports(AppState); actions.showToast('Field report entered into the verification queue.'); }
 	return { init, render, renderIntelligence, renderAlertsPage, renderReports };
 })();
 </script>
 <script>
+// Every displayed/derived numeric value is coerced through this: undefined / null
+// / NaN / non-finite -> the supplied default (0 unless stated).
+function num(value, fallback = 0) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
+function levelFor(score) { const s = num(score); return s >= 75 ? 'Critical' : s >= 55 ? 'High' : s >= 36 ? 'Advisory' : 'Monitoring'; }
+
 const MockAPI = (() => {
+	// Each zone carries a full, real numeric shape. factors0 is the baseline point
+	// breakdown and always sums to score; the live breakdown scales from it.
 	const zones = [
-		{ id:'tawang', name:'Tawang Corridor', district:'Tawang, Arunachal Pradesh', score:67, base:46, slope:72, susceptibility:82, history:68, exposure:86, rainfall:42.6, moisture:76, temperature:19.4, accumulated:184, confidence:84, coordinates:[27.4728,94.9120] },
-		{ id:'siang', name:'East Siang Valley', district:'Pasighat, Arunachal Pradesh', score:52, base:38, slope:61, susceptibility:64, history:54, exposure:72, rainfall:29.8, moisture:64, temperature:22.1, accumulated:138, confidence:79, coordinates:[28.0667,95.3267] },
-		{ id:'chura', name:'Churachandpur Ridge', district:'Churachandpur, Manipur', score:41, base:31, slope:55, susceptibility:59, history:48, exposure:63, rainfall:18.4, moisture:51, temperature:24.7, accumulated:96, confidence:76, coordinates:[24.3333,93.6833] },
-		{ id:'garo', name:'South Garo Hills', district:'Baghmara, Meghalaya', score:28, base:24, slope:43, susceptibility:42, history:35, exposure:51, rainfall:11.2, moisture:39, temperature:25.8, accumulated:67, confidence:73, coordinates:[25.4969,90.6036] },
-		{ id:'bomdila', name:'Bomdila Pass', district:'West Kameng, Arunachal Pradesh', score:19, base:16, slope:38, susceptibility:34, history:25, exposure:32, rainfall:7.4, moisture:29, temperature:14.8, accumulated:42, confidence:78, coordinates:[27.2648,92.4246] },
-		{ id:'ziro', name:'Ziro Valley', district:'Lower Subansiri, Arunachal Pradesh', score:34, base:27, slope:48, susceptibility:47, history:31, exposure:58, rainfall:14.6, moisture:46, temperature:20.6, accumulated:81, confidence:75, coordinates:[27.5444,93.8197] },
-		{ id:'roing', name:'Roing Foothills', district:'Lower Dibang Valley, Arunachal Pradesh', score:47, base:34, slope:64, susceptibility:68, history:52, exposure:61, rainfall:22.7, moisture:58, temperature:21.2, accumulated:119, confidence:77, coordinates:[28.1397,95.8400] },
-		{ id:'ukhrul', name:'Ukhrul Ridge', district:'Ukhrul, Manipur', score:31, base:25, slope:51, susceptibility:45, history:38, exposure:44, rainfall:13.1, moisture:43, temperature:22.8, accumulated:74, confidence:74, coordinates:[25.0968,94.3614] }
+		{ id:'tawang', name:'Tawang Corridor', district:'Tawang, Arunachal Pradesh', score:67, level:'High', confidence:84, base:46, slope:72, susceptibility:82, history:68, exposure:86, rainfall:42.6, moisture:76, temperature:19.4, accumulated:184, coordinates:[27.4728,94.9120], factors0:{ rainfall:24, soil:19, slope:15, historical:9 } },
+		{ id:'siang', name:'East Siang Valley', district:'Pasighat, Arunachal Pradesh', score:53, level:'Advisory', confidence:71, base:38, slope:61, susceptibility:64, history:54, exposure:72, rainfall:29.8, moisture:64, temperature:22.1, accumulated:138, coordinates:[28.0667,95.3267], factors0:{ rainfall:18, soil:14, slope:13, historical:8 } },
+		{ id:'chura', name:'Churachandpur Ridge', district:'Churachandpur, Manipur', score:41, level:'Advisory', confidence:68, base:31, slope:55, susceptibility:59, history:48, exposure:63, rainfall:18.4, moisture:51, temperature:24.7, accumulated:96, coordinates:[24.3333,93.6833], factors0:{ rainfall:12, soil:11, slope:12, historical:6 } },
+		{ id:'garo', name:'South Garo Hills', district:'Baghmara, Meghalaya', score:35, level:'Monitoring', confidence:65, base:24, slope:43, susceptibility:42, history:35, exposure:51, rainfall:11.2, moisture:39, temperature:25.8, accumulated:67, coordinates:[25.4969,90.6036], factors0:{ rainfall:10, soil:9, slope:11, historical:5 } },
+		{ id:'bomdila', name:'Bomdila Pass', district:'West Kameng, Arunachal Pradesh', score:19, level:'Monitoring', confidence:78, base:16, slope:38, susceptibility:34, history:25, exposure:32, rainfall:7.4, moisture:29, temperature:14.8, accumulated:42, coordinates:[27.2648,92.4246], factors0:{ rainfall:6, soil:5, slope:5, historical:3 } },
+		{ id:'ziro', name:'Ziro Valley', district:'Lower Subansiri, Arunachal Pradesh', score:28, level:'Monitoring', confidence:73, base:27, slope:48, susceptibility:47, history:31, exposure:58, rainfall:14.6, moisture:46, temperature:20.6, accumulated:81, coordinates:[27.5444,93.8197], factors0:{ rainfall:8, soil:7, slope:9, historical:4 } },
+		{ id:'roing', name:'Roing Foothills', district:'Lower Dibang Valley, Arunachal Pradesh', score:47, level:'Advisory', confidence:77, base:34, slope:64, susceptibility:68, history:52, exposure:61, rainfall:22.7, moisture:58, temperature:21.2, accumulated:119, coordinates:[28.1397,95.8400], factors0:{ rainfall:16, soil:12, slope:12, historical:7 } },
+		{ id:'ukhrul', name:'Ukhrul Ridge', district:'Ukhrul, Manipur', score:31, level:'Monitoring', confidence:74, base:25, slope:51, susceptibility:45, history:38, exposure:44, rainfall:13.1, moisture:43, temperature:22.8, accumulated:74, coordinates:[25.0968,94.3614], factors0:{ rainfall:10, soil:8, slope:9, historical:4 } }
 	];
 	let reports = [{ location:'Tawang Corridor', observation:'Fresh tension cracks observed near km marker 14.2.', severity:'High', time:'14:18 IST', status:'Under review' }, { location:'East Siang Valley', observation:'Drainage channel clear after morning inspection.', severity:'Advisory', time:'13:42 IST', status:'Verified' }];
 	return { zones:() => structuredClone(zones), reports:() => structuredClone(reports), addReport:report => { reports.unshift(report); return structuredClone(report); } };
@@ -667,9 +729,36 @@ function registerFieldAdjust(report) {
 		at, note, severity: report.severity, location: report.location
 	};
 }
-function normalizeZone(zone) { return { ...zone, score:zone.score ?? zone.risk_score, level:zone.level ?? zone.risk_level, moisture:zone.moisture ?? zone.soil_moisture ?? 0, accumulated:zone.accumulated ?? zone.accumulated_rainfall ?? 0 }; }
+function normalizeZone(zone) {
+	const score = num(zone.score ?? zone.risk_score, 0);
+	const confidence = num(zone.confidence ?? zone.model_confidence ?? zone.confidence_pct, 75);
+	return {
+		...zone,
+		score,
+		level: zone.level ?? zone.risk_level ?? levelFor(score),
+		confidence,
+		moisture: num(zone.moisture ?? zone.soil_moisture, 0),
+		rainfall: num(zone.rainfall, 0),
+		accumulated: num(zone.accumulated ?? zone.accumulated_rainfall, 0),
+		temperature: num(zone.temperature, 0),
+		slope: num(zone.slope, 0),
+		susceptibility: num(zone.susceptibility, 0),
+		history: num(zone.history, 0),
+		exposure: num(zone.exposure, 0)
+	};
+}
 function normalizeReport(report) { return { ...report, time:report.time || (report.timestamp ? new Date(report.timestamp).toLocaleTimeString('en-IN', { hour12:false }) : 'Unknown time') }; }
-function localRisk(zone) { const rainfall = zone.rainfall + AppState.rainfallBoost; const moisture = Math.min(100, zone.moisture + AppState.moistureBoost); let score = Math.round(Math.min(100, Math.max(0, zone.score + AppState.rainfallBoost * (0.38 + zone.susceptibility / 500) + AppState.moistureBoost * 0.35))); const adj = (AppState.fieldAdjust || {})[zone.id]; let confidence = zone.confidence; if (adj) { score = Math.max(0, Math.min(100, score + adj.score)); confidence = Math.min(99, Math.round(zone.confidence + adj.confidence)); } return { ...zone, rainfall, moisture, accumulated:zone.accumulated + AppState.rainfallBoost * 1.7, score, confidence, level:score >= 75 ? 'Critical' : score >= 55 ? 'High' : score >= 35 ? 'Advisory' : 'Monitoring', fieldAdjust:adj || null }; }
+function localRisk(zone) {
+	const rBoost = num(AppState.rainfallBoost), mBoost = num(AppState.moistureBoost);
+	const anchor = num(zone.score);
+	const rainfall = Math.max(0, num(zone.rainfall) + rBoost);
+	const moisture = Math.min(100, Math.max(0, num(zone.moisture) + mBoost));
+	let score = Math.round(Math.min(100, Math.max(0, anchor + rBoost * (0.38 + num(zone.susceptibility) / 500) + mBoost * 0.35)));
+	const adj = (AppState.fieldAdjust || {})[zone.id];
+	let confidence = num(zone.confidence, 75);
+	if (adj) { score = Math.max(0, Math.min(100, score + num(adj.score))); confidence = Math.min(99, Math.round(confidence + num(adj.confidence))); }
+	return { ...zone, rainfall, moisture, accumulated: Math.max(0, num(zone.accumulated) + rBoost * 1.7), score, confidence, level: levelFor(score), fieldAdjust: adj || null };
+}
 function renderState() { AppState.lastUpdated = new Date(); Dashboard.render(AppState); MapView.render(AppState); }
 async function bootstrap() { let weatherSyncFailed = false; try { try { await ApiClient.syncOpenMeteo(); } catch (error) { weatherSyncFailed = true; console.warn('Live weather sync unavailable; loading API data without refresh.', error); } const [zones, sensors, alertPayload, reports, infrastructure, exposure, riskHistory, simulation] = await Promise.all([ApiClient.zones(), ApiClient.sensors(), ApiClient.alerts(), ApiClient.reports(), ApiClient.infrastructure(), ApiClient.exposure(), ApiClient.riskHistory(), ApiClient.simulationHistory()]); AppState.baseline = zones.map(normalizeZone); AppState.zones = await Promise.all(AppState.baseline.map(async zone => normalizeZone(await ApiClient.risk(zone.id, AppState.scenario)))); const selected = AppState.zones.find(zone => zone.id === AppState.selectedZoneId) || AppState.zones[0]; AppState.mlComparison = await ApiClient.mlCompare(selected); AppState.sensors = sensors; AppState.alerts = alertPayload.alerts || []; AppState.reports = reports.map(normalizeReport); AppState.infrastructure = infrastructure; AppState.exposure = exposure; AppState.riskHistory = riskHistory; AppState.simulationEvents = simulation.events || []; AppState.backendConnected = true; showToast(weatherSyncFailed ? 'Connected to Flask API; live weather sync unavailable.' : 'Connected to Flask monitoring API.'); } catch (error) { AppState.backendConnected = false; AppState.zones = AppState.baseline.map(localRisk); showToast('Offline prototype mode: using local fallback data.'); } renderState(); }
 async function selectZone(id) { AppState.previousZones = AppState.zones.map(zone => ({ ...zone })); AppState.selectedZoneId = id; if (AppState.backendConnected) { try { const [result, exposure] = await Promise.all([ApiClient.risk(id, AppState.scenario), ApiClient.exposure(id)]); AppState.zones = AppState.zones.map(zone => zone.id === id ? { ...zone, ...normalizeZone(result) } : zone); AppState.exposure = exposure; } catch (error) { AppState.zones = AppState.zones.map(localRisk); } } renderState(); }

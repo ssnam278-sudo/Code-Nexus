@@ -5,7 +5,8 @@ const MapView = (() => {
     let selectZone;
     let activeMode = 'risk';
     const layers = {};
-    const color = zone => zone.level === 'Critical' ? '#d34438' : zone.level === 'High' ? '#d36c36' : zone.level === 'Advisory' ? '#d5a03b' : '#4d9d69';
+    const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
+    const color = zone => (zone && zone.level) === 'Critical' ? '#d34438' : (zone && zone.level) === 'High' ? '#d36c36' : (zone && zone.level) === 'Advisory' ? '#d5a03b' : '#4d9d69';
 
     function init(selectCallback) {
         selectZone = selectCallback;
@@ -37,7 +38,7 @@ const MapView = (() => {
     }
 
     function resize() { if (map) requestAnimationFrame(() => map.invalidateSize({ animate:false })); }
-    function drawRainfall(zone, windowName) { const multiplier = windowName === 'monsoon' ? 1.55 : windowName === '7d' ? 1.2 : 1; const radius = Math.max(400, Math.min(2600, zone.rainfall * 28 * multiplier)); L.circle(zone.coordinates, { radius, color:'#e07b38', weight:2, dashArray:'6 7', fillColor:'#e07b38', fillOpacity:.11, className:'rainfall-ring' }).addTo(overlayLayer); }
+    function drawRainfall(zone, windowName) { const multiplier = windowName === 'monsoon' ? 1.55 : windowName === '7d' ? 1.2 : 1; const radius = Math.max(400, Math.min(2600, Math.max(0, num(zone.rainfall)) * 28 * multiplier)); L.circle(zone.coordinates, { radius, color:'#e07b38', weight:2, dashArray:'6 7', fillColor:'#e07b38', fillOpacity:.11, className:'rainfall-ring' }).addTo(overlayLayer); }
     function drawExposure(state) { (state.exposure?.features || []).filter(feature => feature.properties?.feature_type === 'infrastructure').forEach(feature => { const [longitude, latitude] = feature.geometry.coordinates; L.circleMarker([latitude, longitude], { radius:7, color:'#f0a33c', fillColor:'#fff4c2', fillOpacity:.95, weight:2 }).bindTooltip(feature.properties.name || 'Exposed asset').addTo(overlayLayer); }); }
     function drawEvacuationRoutes(zone) { const [latitude, longitude] = zone.coordinates; L.polyline([[latitude - .06, longitude - .08], [latitude - .025, longitude - .025], [latitude, longitude]], { color:'#4b9f91', weight:4, dashArray:'10 8', opacity:.9 }).bindTooltip('Prototype evacuation route').addTo(overlayLayer); }
 
@@ -52,7 +53,7 @@ const MapView = (() => {
         (state.zones || []).filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length === 2 && zone.coordinates.every(Number.isFinite)).forEach(zone => {
             const selectedZone = zone.id === state.selectedZoneId;
             const marker = L.circleMarker(zone.coordinates, { radius:selectedZone ? 10 : 7, color:color(zone), fillColor:color(zone), fillOpacity:.9, weight:selectedZone ? 3 : 2, className: zone.level === 'Critical' || zone.level === 'High' ? 'risk-pulse' : '' });
-            marker.bindTooltip(`<strong>${zone.name}</strong><br>${zone.level} · Score ${zone.score}`);
+            marker.bindTooltip(`<strong>${zone.name}</strong><br>${zone.level || 'Monitoring'} · Score ${Math.round(num(zone.score))}`);
             marker.on('click', () => selectZone(zone.id));
             marker.addTo(zoneLayer);
         });
@@ -64,7 +65,7 @@ const MapView = (() => {
         if (selected.id !== map._selectedZone) map._selectedZone = selected.id;
     }
 
-    function renderLocationSwitcher(state) { const switcher = document.getElementById('map-location-switcher'); if (!switcher) return; switcher.innerHTML = state.zones.map(zone => `<button class="map-place ${zone.id === state.selectedZoneId ? 'active' : ''}" data-map-zone="${zone.id}"><i class="place-dot" style="background:${color(zone)}"></i><span>${zone.name}</span><b>${zone.score}</b></button>`).join(''); switcher.querySelectorAll('[data-map-zone]').forEach(button => button.addEventListener('click', () => selectZone(button.dataset.mapZone))); }
+    function renderLocationSwitcher(state) { const switcher = document.getElementById('map-location-switcher'); if (!switcher) return; switcher.innerHTML = state.zones.map(zone => `<button class="map-place ${zone.id === state.selectedZoneId ? 'active' : ''}" data-map-zone="${zone.id}"><i class="place-dot" style="background:${color(zone)}"></i><span>${zone.name || '—'}</span><b>${Math.round(num(zone.score))}</b></button>`).join(''); switcher.querySelectorAll('[data-map-zone]').forEach(button => button.addEventListener('click', () => selectZone(button.dataset.mapZone))); }
     function renderMode(mode) { const label = document.getElementById('active-layer'); if (label) label.textContent = `${mode.toUpperCase()} OVERLAY`; if (window.AppState) render(window.AppState); }
     return { init, render };
 })();

@@ -366,7 +366,16 @@ def health() -> Any:
 
 @app.get("/api/zones")
 def zones() -> Any:
-    return jsonify(_zone_records())
+    records = []
+    for zone in _zone_records():
+        risk = _risk_record(zone)
+        records.append({
+            **zone,
+            "risk_score": risk["risk_score"],
+            "risk_level": risk["risk_level"],
+            "confidence": risk.get("confidence", 95),
+        })
+    return jsonify(records)
 
 
 @app.get("/api/sensors")

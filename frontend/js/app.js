@@ -1,13 +1,20 @@
+// Every displayed/derived numeric value is coerced through this: undefined / null
+// / NaN / non-finite -> the supplied default (0 unless stated).
+function num(value, fallback = 0) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
+function levelFor(score) { const s = num(score); return s >= 75 ? 'Critical' : s >= 55 ? 'High' : s >= 36 ? 'Advisory' : 'Monitoring'; }
+
 const MockAPI = (() => {
+	// Each zone carries a full, real numeric shape. factors0 is the baseline point
+	// breakdown and always sums to score; the live breakdown scales from it.
 	const zones = [
-		{ id:'tawang', name:'Tawang Corridor', district:'Tawang, Arunachal Pradesh', score:67, base:46, slope:72, susceptibility:82, history:68, exposure:86, rainfall:42.6, moisture:76, temperature:19.4, accumulated:184, confidence:84, coordinates:[27.4728,94.9120] },
-		{ id:'siang', name:'East Siang Valley', district:'Pasighat, Arunachal Pradesh', score:52, base:38, slope:61, susceptibility:64, history:54, exposure:72, rainfall:29.8, moisture:64, temperature:22.1, accumulated:138, confidence:79, coordinates:[28.0667,95.3267] },
-		{ id:'chura', name:'Churachandpur Ridge', district:'Churachandpur, Manipur', score:41, base:31, slope:55, susceptibility:59, history:48, exposure:63, rainfall:18.4, moisture:51, temperature:24.7, accumulated:96, confidence:76, coordinates:[24.3333,93.6833] },
-		{ id:'garo', name:'South Garo Hills', district:'Baghmara, Meghalaya', score:28, base:24, slope:43, susceptibility:42, history:35, exposure:51, rainfall:11.2, moisture:39, temperature:25.8, accumulated:67, confidence:73, coordinates:[25.4969,90.6036] },
-		{ id:'bomdila', name:'Bomdila Pass', district:'West Kameng, Arunachal Pradesh', score:19, base:16, slope:38, susceptibility:34, history:25, exposure:32, rainfall:7.4, moisture:29, temperature:14.8, accumulated:42, confidence:78, coordinates:[27.2648,92.4246] },
-		{ id:'ziro', name:'Ziro Valley', district:'Lower Subansiri, Arunachal Pradesh', score:34, base:27, slope:48, susceptibility:47, history:31, exposure:58, rainfall:14.6, moisture:46, temperature:20.6, accumulated:81, confidence:75, coordinates:[27.5444,93.8197] },
-		{ id:'roing', name:'Roing Foothills', district:'Lower Dibang Valley, Arunachal Pradesh', score:47, base:34, slope:64, susceptibility:68, history:52, exposure:61, rainfall:22.7, moisture:58, temperature:21.2, accumulated:119, confidence:77, coordinates:[28.1397,95.8400] },
-		{ id:'ukhrul', name:'Ukhrul Ridge', district:'Ukhrul, Manipur', score:31, base:25, slope:51, susceptibility:45, history:38, exposure:44, rainfall:13.1, moisture:43, temperature:22.8, accumulated:74, confidence:74, coordinates:[25.0968,94.3614] }
+		{ id:'tawang', name:'Tawang Corridor', district:'Tawang, Arunachal Pradesh', score:67, level:'High', confidence:84, base:46, slope:72, susceptibility:82, history:68, exposure:86, rainfall:42.6, moisture:76, temperature:19.4, accumulated:184, coordinates:[27.4728,94.9120], factors0:{ rainfall:24, soil:19, slope:15, historical:9 } },
+		{ id:'siang', name:'East Siang Valley', district:'Pasighat, Arunachal Pradesh', score:53, level:'Advisory', confidence:71, base:38, slope:61, susceptibility:64, history:54, exposure:72, rainfall:29.8, moisture:64, temperature:22.1, accumulated:138, coordinates:[28.0667,95.3267], factors0:{ rainfall:18, soil:14, slope:13, historical:8 } },
+		{ id:'chura', name:'Churachandpur Ridge', district:'Churachandpur, Manipur', score:41, level:'Advisory', confidence:68, base:31, slope:55, susceptibility:59, history:48, exposure:63, rainfall:18.4, moisture:51, temperature:24.7, accumulated:96, coordinates:[24.3333,93.6833], factors0:{ rainfall:12, soil:11, slope:12, historical:6 } },
+		{ id:'garo', name:'South Garo Hills', district:'Baghmara, Meghalaya', score:35, level:'Monitoring', confidence:65, base:24, slope:43, susceptibility:42, history:35, exposure:51, rainfall:11.2, moisture:39, temperature:25.8, accumulated:67, coordinates:[25.4969,90.6036], factors0:{ rainfall:10, soil:9, slope:11, historical:5 } },
+		{ id:'bomdila', name:'Bomdila Pass', district:'West Kameng, Arunachal Pradesh', score:19, level:'Monitoring', confidence:78, base:16, slope:38, susceptibility:34, history:25, exposure:32, rainfall:7.4, moisture:29, temperature:14.8, accumulated:42, coordinates:[27.2648,92.4246], factors0:{ rainfall:6, soil:5, slope:5, historical:3 } },
+		{ id:'ziro', name:'Ziro Valley', district:'Lower Subansiri, Arunachal Pradesh', score:28, level:'Monitoring', confidence:73, base:27, slope:48, susceptibility:47, history:31, exposure:58, rainfall:14.6, moisture:46, temperature:20.6, accumulated:81, coordinates:[27.5444,93.8197], factors0:{ rainfall:8, soil:7, slope:9, historical:4 } },
+		{ id:'roing', name:'Roing Foothills', district:'Lower Dibang Valley, Arunachal Pradesh', score:47, level:'Advisory', confidence:77, base:34, slope:64, susceptibility:68, history:52, exposure:61, rainfall:22.7, moisture:58, temperature:21.2, accumulated:119, coordinates:[28.1397,95.8400], factors0:{ rainfall:16, soil:12, slope:12, historical:7 } },
+		{ id:'ukhrul', name:'Ukhrul Ridge', district:'Ukhrul, Manipur', score:31, level:'Monitoring', confidence:74, base:25, slope:51, susceptibility:45, history:38, exposure:44, rainfall:13.1, moisture:43, temperature:22.8, accumulated:74, coordinates:[25.0968,94.3614], factors0:{ rainfall:10, soil:8, slope:9, historical:4 } }
 	];
 	let reports = [{ location:'Tawang Corridor', observation:'Fresh tension cracks observed near km marker 14.2.', severity:'High', time:'14:18 IST', status:'Under review' }, { location:'East Siang Valley', observation:'Drainage channel clear after morning inspection.', severity:'Advisory', time:'13:42 IST', status:'Verified' }];
 	return { zones:() => structuredClone(zones), reports:() => structuredClone(reports), addReport:report => { reports.unshift(report); return structuredClone(report); } };
@@ -67,9 +74,36 @@ function registerFieldAdjust(report) {
 		at, note, severity: report.severity, location: report.location
 	};
 }
-function normalizeZone(zone) { return { ...zone, score:zone.score ?? zone.risk_score, level:zone.level ?? zone.risk_level, moisture:zone.moisture ?? zone.soil_moisture ?? 0, accumulated:zone.accumulated ?? zone.accumulated_rainfall ?? 0 }; }
+function normalizeZone(zone) {
+	const score = num(zone.score ?? zone.risk_score, 0);
+	const confidence = num(zone.confidence ?? zone.model_confidence ?? zone.confidence_pct, 75);
+	return {
+		...zone,
+		score,
+		level: zone.level ?? zone.risk_level ?? levelFor(score),
+		confidence,
+		moisture: num(zone.moisture ?? zone.soil_moisture, 0),
+		rainfall: num(zone.rainfall, 0),
+		accumulated: num(zone.accumulated ?? zone.accumulated_rainfall, 0),
+		temperature: num(zone.temperature, 0),
+		slope: num(zone.slope, 0),
+		susceptibility: num(zone.susceptibility, 0),
+		history: num(zone.history, 0),
+		exposure: num(zone.exposure, 0)
+	};
+}
 function normalizeReport(report) { return { ...report, time:report.time || (report.timestamp ? new Date(report.timestamp).toLocaleTimeString('en-IN', { hour12:false }) : 'Unknown time') }; }
-function localRisk(zone) { const rainfall = zone.rainfall + AppState.rainfallBoost; const moisture = Math.min(100, zone.moisture + AppState.moistureBoost); let score = Math.round(Math.min(100, Math.max(0, zone.score + AppState.rainfallBoost * (0.38 + zone.susceptibility / 500) + AppState.moistureBoost * 0.35))); const adj = (AppState.fieldAdjust || {})[zone.id]; let confidence = zone.confidence; if (adj) { score = Math.max(0, Math.min(100, score + adj.score)); confidence = Math.min(99, Math.round(zone.confidence + adj.confidence)); } return { ...zone, rainfall, moisture, accumulated:zone.accumulated + AppState.rainfallBoost * 1.7, score, confidence, level:score >= 75 ? 'Critical' : score >= 55 ? 'High' : score >= 35 ? 'Advisory' : 'Monitoring', fieldAdjust:adj || null }; }
+function localRisk(zone) {
+	const rBoost = num(AppState.rainfallBoost), mBoost = num(AppState.moistureBoost);
+	const anchor = num(zone.score);
+	const rainfall = Math.max(0, num(zone.rainfall) + rBoost);
+	const moisture = Math.min(100, Math.max(0, num(zone.moisture) + mBoost));
+	let score = Math.round(Math.min(100, Math.max(0, anchor + rBoost * (0.38 + num(zone.susceptibility) / 500) + mBoost * 0.35)));
+	const adj = (AppState.fieldAdjust || {})[zone.id];
+	let confidence = num(zone.confidence, 75);
+	if (adj) { score = Math.max(0, Math.min(100, score + num(adj.score))); confidence = Math.min(99, Math.round(confidence + num(adj.confidence))); }
+	return { ...zone, rainfall, moisture, accumulated: Math.max(0, num(zone.accumulated) + rBoost * 1.7), score, confidence, level: levelFor(score), fieldAdjust: adj || null };
+}
 function renderState() { AppState.lastUpdated = new Date(); Dashboard.render(AppState); MapView.render(AppState); }
 async function bootstrap() { let weatherSyncFailed = false; try { try { await ApiClient.syncOpenMeteo(); } catch (error) { weatherSyncFailed = true; console.warn('Live weather sync unavailable; loading API data without refresh.', error); } const [zones, sensors, alertPayload, reports, infrastructure, exposure, riskHistory, simulation] = await Promise.all([ApiClient.zones(), ApiClient.sensors(), ApiClient.alerts(), ApiClient.reports(), ApiClient.infrastructure(), ApiClient.exposure(), ApiClient.riskHistory(), ApiClient.simulationHistory()]); AppState.baseline = zones.map(normalizeZone); AppState.zones = await Promise.all(AppState.baseline.map(async zone => normalizeZone(await ApiClient.risk(zone.id, AppState.scenario)))); const selected = AppState.zones.find(zone => zone.id === AppState.selectedZoneId) || AppState.zones[0]; AppState.mlComparison = await ApiClient.mlCompare(selected); AppState.sensors = sensors; AppState.alerts = alertPayload.alerts || []; AppState.reports = reports.map(normalizeReport); AppState.infrastructure = infrastructure; AppState.exposure = exposure; AppState.riskHistory = riskHistory; AppState.simulationEvents = simulation.events || []; AppState.backendConnected = true; showToast(weatherSyncFailed ? 'Connected to Flask API; live weather sync unavailable.' : 'Connected to Flask monitoring API.'); } catch (error) { AppState.backendConnected = false; AppState.zones = AppState.baseline.map(localRisk); showToast('Offline prototype mode: using local fallback data.'); } renderState(); }
 async function selectZone(id) { AppState.previousZones = AppState.zones.map(zone => ({ ...zone })); AppState.selectedZoneId = id; if (AppState.backendConnected) { try { const [result, exposure] = await Promise.all([ApiClient.risk(id, AppState.scenario), ApiClient.exposure(id)]); AppState.zones = AppState.zones.map(zone => zone.id === id ? { ...zone, ...normalizeZone(result) } : zone); AppState.exposure = exposure; } catch (error) { AppState.zones = AppState.zones.map(localRisk); } } renderState(); }
