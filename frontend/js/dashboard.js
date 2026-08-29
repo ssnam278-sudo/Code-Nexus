@@ -465,7 +465,19 @@ const Dashboard = (() => {
 	}
 	function renderPriority(state) { const priority = [...(state.zones || [])].sort((a,b) => (num(b.score) * .65 + num(b.exposure) * .35) - (num(a.score) * .65 + num(a.exposure) * .35)); $('priority-list').innerHTML = priority.slice(0,3).map((zone,index) => { const lvl = safeLevel(zone); return `<div class="priority-row"><strong>0${index + 1}</strong><div><b>${zone.name || '—'}</b><small>${lvl.toUpperCase()} · ${Math.round(num(zone.exposure))}% exposure</small></div><em>${lvl === 'Critical' || lvl === 'High' ? 'VERIFY NOW' : 'MONITOR'}</em></div>`; }).join(''); }
 	function renderIntelligence(state) { $('intelligence-zone-list').innerHTML = (state.zones || []).map(zone => `<div class="intelligence-zone" data-zone-intel="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><b>${Math.round(num(zone.score))}</b></div>`).join(''); document.querySelectorAll('[data-zone-intel]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zoneIntel))); const zone = current(state) || {}; $('intelligence-detail').innerHTML = `<p class="kicker">SELECTED ZONE / ${String(zone.district || '—').toUpperCase()}</p><h2>${zone.name || '—'}</h2><p>${explanation(zone)}</p><div class="factor-list">${factors(zone).map(item => `<div class="factor"><span>${item.label}</span><strong>${item.value}<b>${item.weight}</b></strong></div>`).join('')}</div>`; }
-	function renderAlertsPage(state) { $('all-alerts').innerHTML = (state.zones || []).map(zone => `<div class="all-alert-row"><i class="dot ${levelClass(safeLevel(zone))}"></i><div><strong>${zone.name || '—'}</strong><small>Risk ${Math.round(num(zone.score))} · ${num(zone.rainfall).toFixed(1)} mm/hr · ${Math.round(num(zone.moisture))}% soil moisture</small></div><b>${safeLevel(zone).toUpperCase()}</b></div>`).join(''); $('all-priority').innerHTML = (state.zones || []).slice().sort((a,b) => num(b.score) - num(a.score)).map((zone,index) => { const lvl = safeLevel(zone); return `<div class="all-alert-row"><strong>0${index+1}</strong><div><strong>${zone.name || '—'}</strong><small>${Math.round(num(zone.exposure))}% exposure</small></div><b>${lvl === 'Critical' || lvl === 'High' ? 'IMMEDIATE VERIFICATION' : 'MONITOR'}</b></div>`; }).join(''); }
+	function renderAlertsPage(state) {
+		// the register lists only zones that are actually at an alert level
+		// (Advisory+), so its row count matches the nav "Alerts NN" badge.
+		const ALERT_LEVELS = ['Advisory', 'High', 'Critical'];
+		const all = (state.zones || []);
+		const alerting = all.filter(z => ALERT_LEVELS.includes(safeLevel(z))).sort((a, b) => num(b.score) - num(a.score));
+		const belowCount = all.length - alerting.length;
+		$('all-alerts').innerHTML = (alerting.length
+			? alerting.map(zone => `<div class="all-alert-row"><i class="dot ${levelClass(safeLevel(zone))}"></i><div><strong>${zone.name || '—'}</strong><small>Risk ${Math.round(num(zone.score))} · ${num(zone.rainfall).toFixed(1)} mm/hr · ${Math.round(num(zone.moisture))}% soil moisture</small></div><b>${safeLevel(zone).toUpperCase()}</b></div>`).join('')
+			: '<div class="all-alert-row"><i class="dot monitoring"></i><div><strong>No zones at alert level</strong><small>All monitored zones are below the Advisory threshold</small></div><b>CLEAR</b></div>')
+			+ (belowCount ? `<div class="all-alert-row" style="opacity:.6"><i class="dot monitoring"></i><div><small>${belowCount} zone${belowCount === 1 ? '' : 's'} below Advisory — not listed</small></div></div>` : '');
+		$('all-priority').innerHTML = all.slice().sort((a, b) => num(b.score) - num(a.score)).map((zone, index) => { const lvl = safeLevel(zone); return `<div class="all-alert-row"><strong>0${index + 1}</strong><div><strong>${zone.name || '—'}</strong><small>${Math.round(num(zone.exposure))}% exposure</small></div><b>${lvl === 'Critical' || lvl === 'High' ? 'IMMEDIATE VERIFICATION' : 'MONITOR'}</b></div>`; }).join('');
+	}
 	// keep the field-report Location dropdown in sync with the real zone list
 	function syncReportLocations(state) {
 		const sel = $('report-location'); if (!sel) return;
@@ -479,10 +491,26 @@ const Dashboard = (() => {
 		if (zones.some(z => z.id === keep)) sel.value = keep;
 		else if (state.selectedZoneId) sel.value = state.selectedZoneId;
 	}
+	function evidenceHtml(report) {
+		const data = report.media_data;
+		if (!data || typeof data !== 'string') return '';
+		if (String(report.media_type || data.slice(5, 20)).startsWith('image')) {
+			return `<a class="report-thumb" href="${data}" target="_blank" rel="noopener" title="${report.media_name || 'evidence'}"><img src="${data}" alt="field evidence"></a>`;
+		}
+		return `<a class="report-file" href="${data}" download="${report.media_name || 'evidence'}">📎 ${report.media_name || 'evidence file'}</a>`;
+	}
 	function renderReports(state) {
 		syncReportLocations(state);
-		$('report-list').innerHTML = (state.reports || []).map(report => `<div class="report-row"><div><strong>${report.location || '—'}</strong><small>${report.observation || ''}</small><small>${report.time || '—'} · ${report.status || 'Submitted'}</small></div><select class="report-status" data-report-id="${report.id ?? ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${String(report.severity || 'Advisory').toUpperCase()}</b></div>`).join('');
+		$('report-list').innerHTML = (state.reports || []).map(report => `<div class="report-row">${evidenceHtml(report)}<div><strong>${report.location || '—'}</strong><small>${report.observation || ''}</small><small>${report.time || '—'} · ${report.status || 'Submitted'}</small></div><select class="report-status" data-report-id="${report.id ?? ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${String(report.severity || 'Advisory').toUpperCase()}</b></div>`).join('');
 		document.querySelectorAll('.report-status[data-report-id]').forEach(select => select.addEventListener('change', () => actions.updateReport(select.dataset.reportId, select.value)));
+	}
+	function readFileAsDataURL(file) {
+		return new Promise((resolve, reject) => {
+			const fr = new FileReader();
+			fr.onload = () => resolve(fr.result);
+			fr.onerror = () => reject(fr.error);
+			fr.readAsDataURL(file);
+		});
 	}
 	async function submitReport(event) {
 		event.preventDefault();
@@ -490,13 +518,18 @@ const Dashboard = (() => {
 		const sel = $('report-location');
 		const zoneId = (sel && sel.value) || AppState.selectedZoneId;
 		const locationName = (sel && sel.selectedOptions[0] && sel.selectedOptions[0].textContent) || zoneId;
-		const report = { zone_id: zoneId, location: locationName, observation: $('report-observation').value || 'Ground observation submitted for review.', severity: $('report-severity').value, timestamp: new Date().toISOString(), status: 'Under review', media_type: media ? media.type : null, media_name: media ? media.name : null };
+		let mediaData = null;
+		if (media) {
+			if (media.size > 2 * 1024 * 1024) { actions.showToast('Evidence file too large (max 2 MB).'); return; }
+			try { mediaData = await readFileAsDataURL(media); } catch (e) { mediaData = null; }
+		}
+		const report = { zone_id: zoneId, location: locationName, observation: $('report-observation').value || 'Ground observation submitted for review.', severity: $('report-severity').value, timestamp: new Date().toISOString(), status: 'Under review', media_type: media ? media.type : null, media_name: media ? media.name : null, media_data: mediaData };
 		if (navigator.geolocation) await new Promise(resolve => navigator.geolocation.getCurrentPosition(position => { report.latitude = position.coords.latitude; report.longitude = position.coords.longitude; report.accuracy_m = position.coords.accuracy; resolve(); }, resolve, { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }));
 		await actions.submitReport(report);
 		$('report-observation').value = '';
 		if ($('report-media')) $('report-media').value = '';
 		renderReports(AppState);
-		actions.showToast(`Field report logged for ${locationName}.`);
+		actions.showToast(`Field report logged for ${locationName}${mediaData ? ' with evidence' : ''}.`);
 	}
 	return { init, render, renderIntelligence, renderAlertsPage, renderReports, renderSources };
 })();

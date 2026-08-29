@@ -141,6 +141,7 @@ class DataStore:
 				"accuracy_m": "REAL",
 				"media_type": "TEXT",
 				"media_name": "TEXT",
+				"media_data": "TEXT",   # base64 data URI of the evidence photo/video
 			}.items():
 				if column not in columns:
 					connection.execute(f"ALTER TABLE field_reports ADD COLUMN {column} {definition}")
@@ -160,7 +161,17 @@ class DataStore:
 
 	def save_field_report(self, report: Mapping[str, Any]) -> int:
 		with self.connection() as connection:
-			cursor = connection.execute("INSERT INTO field_reports (zone_id, location, observation, severity, timestamp, evidence_path, status, created_at, latitude, longitude, accuracy_m, media_type, media_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (report["zone_id"], report["location"], report["observation"], report["severity"], report.get("timestamp", self.timestamp()), report.get("evidence_path"), report.get("status", "Submitted"), self.timestamp(), report.get("latitude"), report.get("longitude"), report.get("accuracy_m"), report.get("media_type"), report.get("media_name")))
+			cursor = connection.execute(
+				"INSERT INTO field_reports (zone_id, location, observation, severity, timestamp, evidence_path, status, created_at, latitude, longitude, accuracy_m, media_type, media_name, media_data) "
+				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				(
+					report["zone_id"], report["location"], report["observation"], report["severity"],
+					report.get("timestamp", self.timestamp()), report.get("evidence_path"),
+					report.get("status", "Submitted"), self.timestamp(),
+					report.get("latitude"), report.get("longitude"), report.get("accuracy_m"),
+					report.get("media_type"), report.get("media_name"), report.get("media_data"),
+				),
+			)
 			return int(cursor.lastrowid)
 
 	def update_field_report_status(self, report_id: int, status: str) -> bool:

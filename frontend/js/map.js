@@ -29,7 +29,7 @@ const MapView = (() => {
         if (head && !document.getElementById('map-time-range')) {
             const control = document.createElement('label');
             control.className = 'map-time-control';
-            control.innerHTML = 'TIME WINDOW <select id="map-time-range"><option value="24h">24 hours</option><option value="7d">7 days</option><option value="monsoon">Monsoon simulation</option></select>';
+            control.innerHTML = 'RAINFALL <select id="map-time-range"><option value="now">Now (mm/hr)</option><option value="24h">24-h total (mm)</option></select>';
             head.appendChild(control);
             control.querySelector('select').addEventListener('change', event => { map._timeWindow = event.target.value; renderMode(activeMode); });
         }
@@ -38,7 +38,17 @@ const MapView = (() => {
     }
 
     function resize() { if (map) requestAnimationFrame(() => map.invalidateSize({ animate:false })); }
-    function drawRainfall(zone, windowName) { const multiplier = windowName === 'monsoon' ? 1.55 : windowName === '7d' ? 1.2 : 1; const radius = Math.max(400, Math.min(2600, Math.max(0, num(zone.rainfall)) * 28 * multiplier)); L.circle(zone.coordinates, { radius, color:'#e07b38', weight:2, dashArray:'6 7', fillColor:'#e07b38', fillOpacity:.11, className:'rainfall-ring' }).addTo(overlayLayer); }
+    function drawRainfall(zone, windowName) {
+        // both driven by real Open-Meteo values on the zone record
+        const is24 = windowName === '24h';
+        const value = Math.max(0, num(is24 ? zone.accumulated : zone.rainfall));
+        const radius = is24
+            ? Math.max(400, Math.min(3200, value * 7))
+            : Math.max(400, Math.min(2600, value * 34));
+        L.circle(zone.coordinates, { radius, color:'#e07b38', weight:2, dashArray:'6 7', fillColor:'#e07b38', fillOpacity:.11, className:'rainfall-ring' })
+            .bindTooltip(`${zone.name}: ${value.toFixed(1)} ${is24 ? 'mm / 24 h' : 'mm / hr'}`)
+            .addTo(overlayLayer);
+    }
     function drawExposure(state) { (state.exposure?.features || []).filter(feature => feature.properties?.feature_type === 'infrastructure').forEach(feature => { const [longitude, latitude] = feature.geometry.coordinates; L.circleMarker([latitude, longitude], { radius:7, color:'#f0a33c', fillColor:'#fff4c2', fillOpacity:.95, weight:2 }).bindTooltip(feature.properties.name || 'Exposed asset').addTo(overlayLayer); }); }
     function drawEvacuationRoutes(zone) { const [latitude, longitude] = zone.coordinates; L.polyline([[latitude - .06, longitude - .08], [latitude - .025, longitude - .025], [latitude, longitude]], { color:'#4b9f91', weight:4, dashArray:'10 8', opacity:.9 }).bindTooltip('Prototype evacuation route').addTo(overlayLayer); }
 
@@ -57,7 +67,7 @@ const MapView = (() => {
             marker.on('click', () => selectZone(zone.id));
             marker.addTo(zoneLayer);
         });
-        if (activeMode === 'rainfall') state.zones.filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length === 2 && zone.coordinates.every(Number.isFinite)).forEach(zone => drawRainfall(zone, map._timeWindow || '24h'));
+        if (activeMode === 'rainfall') state.zones.filter(zone => Array.isArray(zone.coordinates) && zone.coordinates.length === 2 && zone.coordinates.every(Number.isFinite)).forEach(zone => drawRainfall(zone, map._timeWindow || 'now'));
         if (activeMode === 'exposure') drawExposure(state);
         if (activeMode === 'roads') drawEvacuationRoutes(selected);
         if (activeMode === 'terrain') { map.removeLayer(layers.satellite); layers.terrain.addTo(map); } else { map.removeLayer(layers.terrain); layers.satellite.addTo(map); }

@@ -396,6 +396,8 @@ async function submitReport(report) {
 	// Always keep a client copy + client-side score effect, so a submission and
 	// its impact survive a refresh even where the serverless DB forgets it.
 	AppState._localReports = [{ ...report, status: report.status || 'Under review' }, ...(AppState._localReports || [])].slice(0, 50);
+	// keep the base64 evidence only on the newest few (localStorage is small)
+	AppState._localReports.forEach((r, i) => { if (i >= 4 && r.media_data) r.media_data = null; });
 	Persist.set('reports', AppState._localReports);
 	registerFieldAdjust(report);
 	AppState.previousZones = AppState.zones.map(z => ({ ...z }));

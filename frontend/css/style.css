@@ -123,3 +123,7 @@
 .conf-basis li.pos b { color:var(--green); }
 .conf-basis li.neg b { color:var(--red); }
 .conf-basis li.neu b { color:#8a9a9d; }
+.report-thumb { flex:0 0 auto; display:block; width:52px; height:52px; border-radius:5px; overflow:hidden; border:1px solid #d5e1e1; }
+.report-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.report-file { flex:0 0 auto; align-self:center; padding:5px 8px; border:1px solid #d5e1e1; border-radius:5px; background:#fbfdfd; color:#2c5b62; font-size:10px; text-decoration:none; }
+.report-file:hover { background:#eef7f6; }

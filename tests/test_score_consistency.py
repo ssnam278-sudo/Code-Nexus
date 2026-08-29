@@ -40,6 +40,23 @@ class ScoreConsistencyTests(unittest.TestCase):
         self.assertGreaterEqual(cleared["cleared"], 1)
         self.assertIsNone(self.client.get("/api/risk?zone_id=garo").get_json().get("ground_truth"))
 
+    def test_field_report_stores_and_size_caps_evidence(self):
+        self.client.post("/api/reports/clear")
+        ok = self.client.post("/api/reports", json={
+            "zone_id": "siang", "location": "East Siang Valley", "observation": "photo",
+            "severity": "Advisory", "media_type": "image/png", "media_name": "x.png",
+            "media_data": "data:image/png;base64,iVBORw0KGgo=",
+        })
+        self.assertEqual(ok.status_code, 201)
+        rows = self.client.get("/api/reports").get_json()
+        self.assertTrue(any((r.get("media_data") or "").startswith("data:image/png") for r in rows))
+        toobig = self.client.post("/api/reports", json={
+            "zone_id": "siang", "location": "x", "observation": "big", "severity": "Advisory",
+            "media_data": "data:image/png;base64," + ("A" * 3_000_000),
+        })
+        self.assertEqual(toobig.status_code, 413)
+        self.client.post("/api/reports/clear")
+
     def test_live_forecast_now_uses_unified_score(self):
         records = [z for z in _zone_records() if all(k in z for k in ("slope", "susceptibility", "history", "coordinates"))]
         # feed the overlay a fake hazard payload and confirm it rewrites now-scores
