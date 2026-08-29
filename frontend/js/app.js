@@ -189,6 +189,7 @@ function computeRisk(zone) {
 		confidence_basis: offlineConfidenceBasis(zone),
 		ground_truth: groundTruth,
 		data_source: zone.data_source || 'simulated',
+		rainfall_data_source: zone.rainfall_data_source || zone.data_source || 'simulated',
 		soil_data_source: zone.soil_data_source || 'simulated'
 	};
 }
@@ -201,6 +202,7 @@ function renderState() {
 	Dashboard.renderIntelligence(AppState);
 	Dashboard.renderAlertsPage(AppState);
 	Dashboard.renderReports(AppState);
+	Dashboard.renderSources(AppState);
 }
 
 // Browser Open-Meteo pull. When the backend is connected it already scored from
@@ -228,7 +230,7 @@ function applyWeather() {
 		return {
 			...z, rainfall: num(w.rainfall), moisture: num(w.soilMoisture), temperature: num(w.temperature),
 			accumulated: num(w.accumulatedRain24h), humidity: num(w.humidity), ...series(z),
-			_live: true, data_source: 'open-meteo', soil_data_source: 'open-meteo', observed_at: new Date().toISOString()
+			_live: true, data_source: 'open-meteo', rainfall_data_source: 'open-meteo', soil_data_source: 'open-meteo', observed_at: new Date().toISOString()
 		};
 	};
 	AppState.baseline = (AppState.baseline || []).map(merge);
@@ -349,6 +351,7 @@ function switchView(view) {
 	if (view === 'intelligence') Dashboard.renderIntelligence(AppState);
 	if (view === 'alerts') Dashboard.renderAlertsPage(AppState);
 	if (view === 'reports') Dashboard.renderReports(AppState);
+	if (view === 'sources') Dashboard.renderSources(AppState);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -70,8 +70,7 @@ const Dashboard = (() => {
 		}
 		if ($('health-score')) $('health-score').innerHTML = `${state.backendConnected ? 'OK' : 'LOCAL'} <small>STATUS</small>`;
 		if ($('health-feed')) $('health-feed').textContent = mode.label;
-		const disp = state.health && state.health.alert_dispatch;
-		if ($('src-dispatch-status')) $('src-dispatch-status').textContent = disp ? (disp.telegram_configured ? 'LIVE · Telegram' : 'NOT CONFIGURED') : 'CONFIGURABLE';
+		renderSources(state);
 		renderChanges(zone, previous, state); renderExposure(zone); renderZones({ ...state, zones }); renderAlerts({ ...state, zones }); renderPriority({ ...state, zones }); renderReports(state);
 	}
 	function defaultFactors(zone) {
@@ -121,6 +120,24 @@ const Dashboard = (() => {
 			{ label:'Slope susceptibility', pts:ints[2], color:'var(--teal)' },
 			{ label:'Historical events', pts:ints[3], color:'var(--teal)' }
 		];
+	}
+	// single source of truth for the live/simulated flags, shared by the header
+	// badge, the telemetry cards AND the Data Sources transparency page.
+	function sourceFlags(state, zones) {
+		const list = (zones && zones.length ? zones : (state && state.zones) || []);
+		const n = list.length || 1;
+		const rainLive = list.filter(z => z && (z.rainfall_data_source === 'open-meteo' || z.data_source === 'open-meteo' || z._live)).length;
+		const soilSrcs = new Set(list.map(z => z && z.soil_data_source).filter(Boolean));
+		let soil = 'simulated';
+		if (list.length && list.every(z => z && z.soil_data_source === 'nasa-power')) soil = 'nasa-power';
+		else if (list.length && list.every(z => z && (z.soil_data_source === 'open-meteo' || z.soil_data_source === 'nasa-power'))) soil = 'open-meteo';
+		else if (soilSrcs.has('nasa-power') || soilSrcs.has('open-meteo')) soil = 'partial';
+		const selected = list.find(z => z && z.id === (state && state.selectedZoneId)) || list[0] || {};
+		return {
+			rain: rainLive === n && n > 0 ? 'live' : rainLive ? 'partial' : 'simulated',
+			soil,
+			ageSeconds: feedAge(selected, state)
+		};
 	}
 	// one honest status: LIVE DATA / PARTIAL LIVE DATA / SIMULATED DATA
 	function dataModeBadge(state, zones) {
@@ -251,9 +268,10 @@ const Dashboard = (() => {
 		return `${(seconds / 3600).toFixed(1)} h ago`;
 	}
 	function renderTelemetryMeta(zone, state) {
-		const rainLive = !!(zone && (zone._live || zone.data_source === 'open-meteo'));
-		const soilSrc = zone && zone.soil_data_source;
-		const soilLive = soilSrc === 'nasa-power' || soilSrc === 'open-meteo' || (rainLive && !soilSrc);
+		// use the SAME flags the Data Sources page and the header badge use
+		const flags = sourceFlags(state);
+		const rainLive = flags.rain !== 'simulated';
+		const soilLive = flags.soil !== 'simulated';
 		if (zone && zone._live) {
 			const s = sparkSeries(zone);
 			const badges = [pctBadge(s.rain), pctBadge(s.soil), pctBadge(s.temp), pctBadge(s.acc)];
@@ -263,10 +281,9 @@ const Dashboard = (() => {
 				b.className = badges[i].cls;
 			});
 		}
-		// per-card provenance tag: rainfall/accum -> Open-Meteo, soil -> NASA POWER
 		const tags = [
 			rainLive ? { t: 'LIVE', c: 'live' } : { t: 'SIM', c: 'sim' },
-			soilLive ? { t: soilSrc === 'nasa-power' ? 'POWER' : 'LIVE', c: 'live' } : { t: 'SIM', c: 'sim' },
+			soilLive ? { t: flags.soil === 'nasa-power' ? 'POWER' : 'LIVE', c: 'live' } : { t: 'SIM', c: 'sim' },
 			rainLive ? { t: 'LIVE', c: 'live' } : { t: 'SIM', c: 'sim' },
 			rainLive ? { t: 'LIVE', c: 'live' } : { t: 'SIM', c: 'sim' }
 		];
@@ -277,24 +294,35 @@ const Dashboard = (() => {
 			tag.textContent = tags[i].t;
 			tag.className = `src-tag ${tags[i].c}`;
 		});
-		const age = feedAge(zone, state);
 		const feed = document.querySelector('.telemetry .feed-state');
 		if (feed) {
 			feed.innerHTML = rainLive
-				? `<i class="dot green"></i> LIVE${age != null ? ' · ' + ageText(age) : ''}`
+				? `<i class="dot green"></i> LIVE${flags.ageSeconds != null ? ' · ' + ageText(flags.ageSeconds) : ''}`
 				: `<i class="dot cyan"></i> SIMULATED FEED`;
 		}
-		const srcStatus = $('src-telemetry-status'), srcSub = $('src-telemetry-sub');
-		if (srcStatus) srcStatus.textContent = rainLive ? 'LIVE' : 'SIMULATED';
-		if (srcSub) srcSub.textContent = rainLive
-			? `Open-Meteo forecast API — keyless${age != null ? ' · ' + ageText(age) : ''}`
+	}
+	// The transparency page — reads the SAME sourceFlags every other view uses.
+	function renderSources(state) {
+		if (!$('src-telemetry-status')) return;
+		const flags = sourceFlags(state);
+		const age = flags.ageSeconds != null ? ' · ' + ageText(flags.ageSeconds) : '';
+		$('src-telemetry-status').textContent = flags.rain === 'live' ? 'LIVE' : flags.rain === 'partial' ? 'PARTIAL LIVE' : 'SIMULATED';
+		if ($('src-telemetry-sub')) $('src-telemetry-sub').textContent = flags.rain !== 'simulated'
+			? `Open-Meteo forecast API — keyless${age}`
 			: 'Simulated rainfall (no live feed connected)';
-		const soilStatusEl = $('src-soil-status'), soilSubEl = $('src-soil-sub');
-		if (soilStatusEl) soilStatusEl.textContent = soilLive ? (soilSrc === 'nasa-power' ? 'LIVE · NASA POWER' : 'LIVE · Open-Meteo') : 'SIMULATED';
-		if (soilSubEl) soilSubEl.textContent = soilSrc === 'nasa-power'
-			? 'NASA POWER GWETTOP (daily, ~2–5 day lag); Open-Meteo cross-check'
-			: soilSrc === 'open-meteo' ? 'Open-Meteo 0–7 cm soil moisture (live)'
+		const soilLabel = flags.soil === 'nasa-power' ? 'LIVE · NASA POWER'
+			: flags.soil === 'open-meteo' ? 'LIVE · Open-Meteo'
+			: flags.soil === 'partial' ? 'PARTIAL LIVE' : 'SIMULATED';
+		$('src-soil-status').textContent = soilLabel;
+		if ($('src-soil-sub')) $('src-soil-sub').textContent = flags.soil === 'nasa-power'
+			? `NASA POWER GWETTOP (daily, ~2–5 day lag); Open-Meteo cross-check${age}`
+			: flags.soil === 'open-meteo' ? `Open-Meteo 0–7 cm soil moisture (live)${age}`
+			: flags.soil === 'partial' ? 'Mixed: some zones live, some simulated'
 			: 'Simulated soil saturation (no live feed connected)';
+		const disp = state && state.health && state.health.alert_dispatch;
+		if ($('src-dispatch-status')) $('src-dispatch-status').textContent = disp
+			? (disp.telegram_configured ? 'LIVE · Telegram' : 'NOT CONFIGURED')
+			: 'CONFIGURABLE';
 	}
 	function renderForecast(zone) {
 		const cells = document.querySelectorAll('.forecast-values strong');
@@ -437,5 +465,5 @@ const Dashboard = (() => {
 	function renderAlertsPage(state) { $('all-alerts').innerHTML = (state.zones || []).map(zone => `<div class="all-alert-row"><i class="dot ${levelClass(safeLevel(zone))}"></i><div><strong>${zone.name || '—'}</strong><small>Risk ${Math.round(num(zone.score))} · ${num(zone.rainfall).toFixed(1)} mm/hr · ${Math.round(num(zone.moisture))}% soil moisture</small></div><b>${safeLevel(zone).toUpperCase()}</b></div>`).join(''); $('all-priority').innerHTML = (state.zones || []).slice().sort((a,b) => num(b.score) - num(a.score)).map((zone,index) => { const lvl = safeLevel(zone); return `<div class="all-alert-row"><strong>0${index+1}</strong><div><strong>${zone.name || '—'}</strong><small>${Math.round(num(zone.exposure))}% exposure</small></div><b>${lvl === 'Critical' || lvl === 'High' ? 'IMMEDIATE VERIFICATION' : 'MONITOR'}</b></div>`; }).join(''); }
 	function renderReports(state) { $('report-list').innerHTML = (state.reports || []).map(report => `<div class="report-row"><div><strong>${report.location || '—'}</strong><small>${report.observation || ''}</small><small>${report.time || '—'} · ${report.status || 'Submitted'}</small></div><select class="report-status" data-report-id="${report.id || ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${String(report.severity || 'Advisory').toUpperCase()}</b></div>`).join(''); document.querySelectorAll('.report-status[data-report-id]').forEach(select => select.addEventListener('change', () => actions.updateReport(Number(select.dataset.reportId), select.value))); }
 	async function submitReport(event) { event.preventDefault(); const media = $('report-media').files[0]; const report = { zone_id:AppState.selectedZoneId, location:$('report-location').value, observation:$('report-observation').value || 'Ground observation submitted for review.', severity:$('report-severity').value, timestamp:new Date().toISOString(), status:'Under review', media_type:media ? media.type : null, media_name:media ? media.name : null }; if (navigator.geolocation) await new Promise(resolve => navigator.geolocation.getCurrentPosition(position => { report.latitude = position.coords.latitude; report.longitude = position.coords.longitude; report.accuracy_m = position.coords.accuracy; resolve(); }, resolve, { enableHighAccuracy:true, timeout:5000, maximumAge:60000 })); await actions.submitReport(report); $('report-form').reset(); renderReports(AppState); actions.showToast('Field report entered into the verification queue.'); }
-	return { init, render, renderIntelligence, renderAlertsPage, renderReports };
+	return { init, render, renderIntelligence, renderAlertsPage, renderReports, renderSources };
 })();
