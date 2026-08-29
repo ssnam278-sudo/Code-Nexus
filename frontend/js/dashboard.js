@@ -139,16 +139,16 @@ const Dashboard = (() => {
 			ageSeconds: feedAge(selected, state)
 		};
 	}
-	// one honest status: LIVE DATA / PARTIAL LIVE DATA / SIMULATED DATA
+	// one honest status: LIVE DATA / PARTIAL LIVE DATA / SIMULATED DATA.
+	// Derived from what the client actually holds (sourceFlags) — the server's
+	// own data_mode can say "simulated" while the browser has a live Open-Meteo
+	// pull, and the badge must match what the pages show.
 	function dataModeBadge(state, zones) {
-		const h = state && state.health && state.health.data_mode;
-		if (h && h.label) return { label: h.label, cls: h.mode };
-		const list = zones || [];
-		const n = list.length || 1;
-		const rainLive = list.filter(z => z && (z.data_source === 'open-meteo' || z._live)).length;
-		const soilLive = list.filter(z => z && (z.soil_data_source === 'nasa-power' || z.soil_data_source === 'open-meteo')).length;
-		if (rainLive === n && soilLive === n) return { label: 'LIVE DATA', cls: 'live' };
-		if (rainLive || soilLive) return { label: 'PARTIAL LIVE DATA', cls: 'partial' };
+		const f = sourceFlags(state, zones);
+		const rainOk = f.rain === 'live';
+		const soilOk = f.soil === 'nasa-power' || f.soil === 'open-meteo';
+		if (rainOk && soilOk) return { label: 'LIVE DATA', cls: 'live' };
+		if (rainOk || soilOk || f.rain === 'partial' || f.soil === 'partial') return { label: 'PARTIAL LIVE DATA', cls: 'partial' };
 		return { label: 'SIMULATED DATA', cls: 'simulated' };
 	}
 	// newest real data timestamp — same freshness the Live Forecast tab reports

@@ -24,7 +24,7 @@ _FILL = -999.0
 _PARAMETERS = "GWETTOP,GWETROOT"
 
 
-def fetch_soil_moisture(zone: Mapping[str, Any], timeout: float = 15.0) -> dict[str, Any]:
+def fetch_soil_moisture(zone: Mapping[str, Any], timeout: float = 8.0) -> dict[str, Any]:
 	"""Latest valid daily surface soil wetness for one zone, as a percentage."""
 	latitude, longitude = zone["coordinates"]
 	end = datetime.now(timezone.utc).date()

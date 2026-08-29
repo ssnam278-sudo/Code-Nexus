@@ -6,6 +6,7 @@ import json
 import math
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -478,40 +479,61 @@ def sensors() -> Any:
     return jsonify(list(readings.values()))
 
 
+def _fetch_zone_reading(zone: dict[str, Any]) -> dict[str, Any]:
+    """Live rainfall (Open-Meteo, required) + soil moisture (NASA POWER, with
+    Open-Meteo as the fallback + cross-check) for one zone."""
+    reading = fetch_current(zone)
+    reading["rainfall_source"] = "open-meteo"
+    reading["soil_source"] = "open-meteo"
+    reading["soil_observed_at"] = reading.get("observed_at")
+    open_meteo_soil = reading["soil_moisture"]
+    try:
+        power = fetch_soil_moisture(zone)
+        reading["soil_moisture"] = power["soil_moisture"]
+        reading["soil_source"] = "nasa-power"
+        reading["soil_observed_at"] = power["observed_at"]
+        reading["soil_moisture_cross_check_open_meteo"] = open_meteo_soil
+    except (KeyError, TypeError, ValueError, OSError) as power_error:
+        reading["soil_source_note"] = f"NASA POWER unavailable: {power_error}"
+    return reading
+
+
 @app.post("/api/live/open-meteo")
 def sync_open_meteo() -> Any:
-    """Pull live rainfall (Open-Meteo) and soil moisture (NASA POWER, Open-Meteo
-    fallback) for every zone and persist them as the current sensor reading."""
+    """Pull live rainfall + soil moisture for every zone, in parallel, and
+    persist them as the current sensor readings. Partial success is still
+    persisted so a slow/failed provider for one zone never blanks the feed."""
     global _open_meteo_last_sync
     force = request.args.get("force", "false").lower() == "true"
     if not force and time.monotonic() - _open_meteo_last_sync < _open_meteo_sync_seconds:
         return jsonify({"status": "cached", "provider": "Open-Meteo", "next_sync_seconds": round(_open_meteo_sync_seconds - (time.monotonic() - _open_meteo_last_sync))})
-    readings = []
-    for zone in _zone_records():
-        try:
-            reading = fetch_current(zone)
-            reading["rainfall_source"] = "open-meteo"
-            reading["soil_source"] = "open-meteo"
-            reading["soil_observed_at"] = reading.get("observed_at")
-            open_meteo_soil = reading["soil_moisture"]
-            # NASA POWER surface soil wetness, when reachable, overrides the
-            # Open-Meteo soil value; Open-Meteo is kept as a cross-check.
+
+    zones = _zone_records()
+    readings: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    with ThreadPoolExecutor(max_workers=min(8, len(zones) or 1)) as pool:
+        futures = {pool.submit(_fetch_zone_reading, zone): zone for zone in zones}
+        for future in as_completed(futures):
+            zone = futures[future]
             try:
-                power = fetch_soil_moisture(zone)
-                reading["soil_moisture"] = power["soil_moisture"]
-                reading["soil_source"] = "nasa-power"
-                reading["soil_observed_at"] = power["observed_at"]
-                reading["soil_moisture_cross_check_open_meteo"] = open_meteo_soil
-            except (KeyError, TypeError, ValueError, OSError) as power_error:
-                reading["soil_source_note"] = f"NASA POWER unavailable: {power_error}"
-            store.upsert_current_sensor(reading)
-            store.save_sensor_update(reading)
-            publish("telemetry", reading)
-            readings.append(reading)
-        except (KeyError, TypeError, ValueError, OSError) as error:
-            return jsonify({"error": "Open-Meteo sync failed", "detail": str(error), "completed": len(readings)}), 502
+                reading = future.result()
+                store.upsert_current_sensor(reading)
+                store.save_sensor_update(reading)
+                publish("telemetry", reading)
+                readings.append(reading)
+            except (KeyError, TypeError, ValueError, OSError) as error:
+                errors.append({"zone": zone.get("id", "?"), "error": str(error)})
+
+    if not readings:
+        return jsonify({"error": "Open-Meteo sync failed", "detail": errors}), 502
     _open_meteo_last_sync = time.monotonic()
-    return jsonify({"status": "updated", "provider": "Open-Meteo + NASA POWER", "readings": readings, "recorded_at": store.timestamp()})
+    return jsonify({
+        "status": "updated",
+        "provider": "Open-Meteo + NASA POWER",
+        "readings": readings,
+        "errors": errors,
+        "recorded_at": store.timestamp(),
+    })
 
 
 @app.get("/api/history")

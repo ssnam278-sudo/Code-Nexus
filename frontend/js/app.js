@@ -205,9 +205,11 @@ function renderState() {
 	Dashboard.renderSources(AppState);
 }
 
-// Browser Open-Meteo pull. When the backend is connected it already scored from
-// its own server-side pull, so this only decorates the cards with hourly series.
-// Offline, it feeds the shared formula.
+// Browser Open-Meteo pull. If the backend already scored from its own live sync
+// we just attach the hourly series. If the backend is on simulated inputs (e.g.
+// its server-side sync timed out on a serverless host) but the browser has live
+// Open-Meteo, we score from the browser data with the SAME formula and label the
+// source honestly — so every page, including Data Sources, agrees.
 function applyWeather() {
 	if (typeof WeatherService === 'undefined' || !WeatherService.hasData()) return false;
 	const series = z => {
@@ -220,11 +222,27 @@ function applyWeather() {
 			forecastRainfall: Array.isArray(w.forecastRainfall) ? w.forecastRainfall : []
 		};
 	};
+	const mergeLive = z => {
+		const w = WeatherService.get(z.id);
+		if (!w) return z;
+		const merged = {
+			...z, rainfall: num(w.rainfall), moisture: num(w.soilMoisture), temperature: num(w.temperature),
+			accumulated: num(w.accumulatedRain24h), humidity: num(w.humidity), ...series(z),
+			_live: true, data_source: 'open-meteo', rainfall_data_source: 'open-meteo',
+			soil_data_source: 'open-meteo', observed_at: new Date().toISOString()
+		};
+		return computeRisk(merged);
+	};
+
 	if (AppState.backendConnected) {
-		AppState.zones = AppState.zones.map(z => ({ ...z, ...series(z), _live: true }));
+		AppState.zones = AppState.zones.map(z =>
+			z.data_source === 'open-meteo'
+				? { ...z, ...series(z), _live: true }   // backend already live -> just decorate
+				: mergeLive(z)                          // backend simulated -> use the browser feed
+		);
 		return true;
 	}
-	const merge = z => {
+	AppState.baseline = (AppState.baseline || []).map(z => {
 		const w = WeatherService.get(z.id);
 		if (!w) return z;
 		return {
@@ -232,8 +250,7 @@ function applyWeather() {
 			accumulated: num(w.accumulatedRain24h), humidity: num(w.humidity), ...series(z),
 			_live: true, data_source: 'open-meteo', rainfall_data_source: 'open-meteo', soil_data_source: 'open-meteo', observed_at: new Date().toISOString()
 		};
-	};
-	AppState.baseline = (AppState.baseline || []).map(merge);
+	});
 	AppState.zones = AppState.baseline.map(computeRisk);
 	AppState.liveWeather = true;
 	return true;
@@ -251,9 +268,12 @@ async function loadWeather() {
 }
 
 async function bootstrap() {
-	let weatherSyncFailed = false;
 	try {
-		try { await ApiClient.syncOpenMeteo(); } catch (error) { weatherSyncFailed = true; console.warn('Live weather sync unavailable.', error); }
+		// Kick the server-side pull but DON'T block on it — NASA POWER + Open-Meteo
+		// for every zone can take longer than a serverless request budget. The
+		// next 7 s cycle picks up the fresh readings; the browser pull covers the
+		// gap in the meantime.
+		ApiClient.syncOpenMeteo().catch(() => {});
 		const [zones, alertPayload, reports, infrastructure, exposure, riskHistory, simulation, health] = await Promise.all([
 			ApiClient.zones(), ApiClient.alerts(), ApiClient.reports(), ApiClient.infrastructure(),
 			ApiClient.exposure(), ApiClient.riskHistory(), ApiClient.simulationHistory(), ApiClient.health().catch(() => null)
@@ -270,7 +290,7 @@ async function bootstrap() {
 		AppState.riskHistory = riskHistory;
 		AppState.simulationEvents = simulation.events || [];
 		AppState.backendConnected = true;
-		showToast(weatherSyncFailed ? 'Connected; live weather sync unavailable this cycle.' : 'Connected to Code Nexus API.');
+		showToast('Connected to Code Nexus API.');
 	} catch (error) {
 		AppState.backendConnected = false;
 		AppState.health = null;
