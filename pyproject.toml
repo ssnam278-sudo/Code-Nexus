@@ -8,6 +8,9 @@ description = "Rainfall-triggered landslide situation room (prototype)"
 requires-python = ">=3.11"
 dependencies = [
     "Flask>=3.0,<4.0",
+    # IANA tz database for zoneinfo (IST timestamps in alert messages) on hosts
+    # without a system tz db.
+    "tzdata>=2024.1",
     # scikit-learn powers POST /api/ml/compare and is imported lazily. It is
     # omitted here so the serverless bundle stays under Vercel's 250 MB limit;
     # that endpoint returns 503 on Vercel. Render installs it via requirements.txt.

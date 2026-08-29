@@ -21,6 +21,7 @@ import os
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Mapping
+from zoneinfo import ZoneInfo
 
 from .cap import build_cap_alert
 from .live_store import LiveStore
@@ -29,6 +30,16 @@ _ESCALATIONS = {"High", "Critical"}
 _RANK = {"Monitoring": 0, "Advisory": 1, "High": 2, "Critical": 3}
 
 _TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+_IST = ZoneInfo("Asia/Kolkata")
+
+
+def ist_stamp() -> str:
+    """Current time in India Standard Time, e.g. '2026-08-29 17:15 IST'.
+
+    Uses the tz database (via zoneinfo / tzdata) so it stays correct regardless
+    of the server's own timezone.
+    """
+    return datetime.now(_IST).strftime("%Y-%m-%d %H:%M IST")
 
 
 def telegram_configured() -> bool:
@@ -92,7 +103,7 @@ def _messages(zone: Mapping[str, Any], level: str, now: Mapping[str, Any], forec
         "Critical": "Immediate verification; consider closing the road and moving exposed residents.",
     }.get(level, "Monitor.")
     lead = _lead_bits(forecast)
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    stamp = ist_stamp()
 
     plain = (
         f"[Code Nexus] {level} landslide risk - {name} ({district}). "

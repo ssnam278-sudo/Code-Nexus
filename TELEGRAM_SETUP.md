@@ -72,5 +72,8 @@ Risk score: 82/100
 Forecast: Critical projected in ~5 h
 Coordinates: 27.5861, 91.8594
 Action: Immediate verification; consider closing the road and moving exposed residents.
-2026-08-29 07:15 UTC
+2026-08-29 12:45 IST
 ```
+
+Timestamps are India Standard Time via `zoneinfo` (`ZoneInfo("Asia/Kolkata")`),
+so they stay correct no matter the server's own timezone.

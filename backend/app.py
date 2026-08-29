@@ -15,6 +15,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from .alerts import ALERT_STATES, build_alert, priority_queue
 from .alert_dispatch import (
     dispatch as dispatch_alert,
+    ist_stamp,
     send_telegram_message,
     telegram_configured,
     webhook_configured,
@@ -747,11 +748,10 @@ def dispatch_test() -> Any:
     configured_key = app.config["INGEST_API_KEY"]
     if configured_key and request.headers.get("X-Ingest-Key") != configured_key:
         return jsonify({"error": "invalid ingestion key"}), 401
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     text = (
         "\U0001f9ea <b>Code Nexus - test alert</b>\n"
         "Telegram dispatch is wired correctly. No landslide risk is implied.\n"
-        f"<i>{stamp}</i>"
+        f"<i>{ist_stamp()}</i>"
     )
     delivered = send_telegram_message(text)
     if delivered is None:

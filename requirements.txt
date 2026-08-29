@@ -1,6 +1,9 @@
 # Runtime dependencies for the deployed Code Nexus app (backend/app.py).
 Flask>=3.0,<4.0
 gunicorn>=22,<24
+# IANA tz database for zoneinfo (IST timestamps in alerts); needed on hosts
+# without a system tz db (Windows, slim containers).
+tzdata>=2024.1
 # Powers POST /api/ml/compare. The import is lazy: if this build is too large
 # for the host (e.g. Vercel Hobby's 250 MB Python bundle), remove this line and
 # redeploy — every other endpoint keeps working and /api/ml/compare returns 503.
