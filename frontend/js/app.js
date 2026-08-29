@@ -69,6 +69,52 @@ const SeedReports = (() => {
 	return { list: () => structuredClone(reports), add: r => { reports.unshift(r); return structuredClone(r); } };
 })();
 
+/* Small localStorage layer. On Vercel the serverless SQLite in /tmp is wiped
+ * between requests, so field reports, their score effect, and acknowledgements
+ * are also kept client-side and restored on load. On Render the backend DB is
+ * authoritative and these are merged in (deduped). */
+const Persist = window.Persist = {
+	get(key, fallback) {
+		try { const v = localStorage.getItem('codenexus.' + key); return v ? JSON.parse(v) : fallback; }
+		catch (e) { return fallback; }
+	},
+	set(key, value) { try { localStorage.setItem('codenexus.' + key, JSON.stringify(value)); } catch (e) {} },
+	clear(key) { try { localStorage.removeItem('codenexus.' + key); } catch (e) {} }
+};
+
+// Merge locally-stored field reports into whatever the backend returned, newest
+// first, deduped by (timestamp|observation).
+function mergeLocalReports(backendReports) {
+	const seen = new Set();
+	const out = [];
+	const push = r => {
+		const key = (r.timestamp || r.time || '') + '|' + (r.observation || '');
+		if (seen.has(key)) return;
+		seen.add(key); out.push(r);
+	};
+	(AppState._localReports || []).forEach(push);
+	(backendReports || []).forEach(push);
+	return out;
+}
+
+// Apply the client-side field-report score effect to any zone the backend did
+// NOT already adjust (idempotent — offline computeRisk has usually done it).
+function mergeGroundTruth(zones) {
+	const adj = AppState.fieldAdjust || {};
+	return (zones || []).map(z => {
+		const a = adj[z.id];
+		if (!a || z.ground_truth) return z;
+		const score = Math.max(0, Math.min(100, num(z.score) + num(a.score)));
+		return {
+			...z,
+			score, risk_score: score,
+			level: levelFor(score), risk_level: levelFor(score),
+			confidence: Math.min(99, Math.round(num(z.confidence, 75) + num(a.confidence))),
+			ground_truth: { delta_score: num(a.score), delta_confidence: num(a.confidence), note: a.note, location: a.location, severity: a.severity, status: 'field report' }
+		};
+	});
+}
+
 function resolveApiBase() {
 	const configured = (window.CODENEXUS_CONFIG?.apiBaseUrl || '').replace(/\/$/, '');
 	if (!configured) return '';
@@ -98,7 +144,8 @@ const ApiClient = {
 	async riskHistory() { return this.request('/api/risk-history'); },
 	async simulationHistory() { return this.request('/api/simulation'); },
 	async simulation(scenario, zoneId) { return this.request('/api/simulation', { method: 'POST', body: JSON.stringify({ scenario, zone_id: zoneId }) }); },
-	async createReport(report) { return this.request('/api/reports', { method: 'POST', body: JSON.stringify(report) }); }
+	async createReport(report) { return this.request('/api/reports', { method: 'POST', body: JSON.stringify(report) }); },
+	async clearReports() { return this.request('/api/reports/clear', { method: 'POST' }); }
 };
 
 const SCENARIO_BOOSTS = { Normal: [0, 0], 'Heavy Rain': [18, 9], 'Extreme Rain': [42, 18], Recovery: [-8, -6] };
@@ -107,7 +154,9 @@ const AppState = window.AppState = {
 	exposure: { type: 'FeatureCollection', features: [] }, riskHistory: [], simulationEvents: [],
 	reports: SeedReports.list(), selectedZoneId: 'tawang', scenario: 'Normal', rainfallBoost: 0, moistureBoost: 0,
 	lastUpdated: new Date(), previousZones: [], backendConnected: false, health: null, mlComparison: null,
-	fieldAdjust: {}, acks: {}
+	fieldAdjust: Persist.get('fieldAdjust', {}),
+	acks: Persist.get('acks', {}),
+	_localReports: Persist.get('reports', [])
 };
 
 // A submitted field report nudges its zone's risk score and model confidence
@@ -129,6 +178,7 @@ function registerFieldAdjust(report) {
 		confidence: Math.min(18, prev.confidence + dConf),
 		at, note, severity: report.severity, location: report.location
 	};
+	Persist.set('fieldAdjust', AppState.fieldAdjust);
 }
 
 function normalizeZone(zone) {
@@ -284,7 +334,7 @@ async function bootstrap() {
 		const selected = AppState.zones.find(zone => zone.id === AppState.selectedZoneId) || AppState.zones[0];
 		AppState.mlComparison = selected ? await ApiClient.mlCompare(selected).catch(() => null) : null;
 		AppState.alerts = alertPayload.alerts || [];
-		AppState.reports = reports.map(normalizeReport);
+		AppState.reports = mergeLocalReports(reports.map(normalizeReport));
 		AppState.infrastructure = infrastructure;
 		AppState.exposure = exposure;
 		AppState.riskHistory = riskHistory;
@@ -295,6 +345,7 @@ async function bootstrap() {
 		AppState.backendConnected = false;
 		AppState.health = null;
 		AppState.zones = AppState.baseline.map(computeRisk);
+		AppState.reports = mergeLocalReports(SeedReports.list());
 		showToast('Offline mode: scores computed locally with the same formula.');
 	}
 	// Re-merge the browser Open-Meteo pull every cycle. On Vercel the serverless
@@ -302,6 +353,8 @@ async function bootstrap() {
 	// "simulated" — the browser feed is what makes the dashboard live, and it
 	// must survive each bootstrap refresh instead of being clobbered by it.
 	applyWeather();
+	// Apply any field-report score effect the backend didn't remember (Vercel).
+	AppState.zones = mergeGroundTruth(AppState.zones);
 	renderState();
 }
 
@@ -323,7 +376,7 @@ async function applyScenario(scenario) {
 	if (AppState.backendConnected) {
 		try {
 			const result = await ApiClient.simulation(scenario);
-			AppState.zones = result.results.map(normalizeZone);
+			AppState.zones = mergeGroundTruth(result.results.map(normalizeZone));
 			AppState.riskHistory = await ApiClient.riskHistory();
 			AppState.alerts = (await ApiClient.alerts()).alerts || [];
 			AppState.simulationEvents = (await ApiClient.simulationHistory()).events || [];
@@ -338,24 +391,28 @@ async function applyScenario(scenario) {
 }
 
 async function submitReport(report) {
+	report.time = report.time || (new Date().toLocaleTimeString('en-IN', { hour12: false }) + ' IST');
+	report.id = report.id || ('local-' + Date.now());
+	// Always keep a client copy + client-side score effect, so a submission and
+	// its impact survive a refresh even where the serverless DB forgets it.
+	AppState._localReports = [{ ...report, status: report.status || 'Under review' }, ...(AppState._localReports || [])].slice(0, 50);
+	Persist.set('reports', AppState._localReports);
+	registerFieldAdjust(report);
+	AppState.previousZones = AppState.zones.map(z => ({ ...z }));
+	AppState._fieldPending = true;
+	AppState._skipJitterUntil = Date.now() + 9000;
+
 	if (AppState.backendConnected) {
 		try {
 			await ApiClient.createReport(report);
-			AppState.reports = (await ApiClient.reports()).map(normalizeReport);
-			AppState.previousZones = AppState.zones.map(z => ({ ...z }));
-			AppState.zones = (await ApiClient.zones()).map(normalizeZone);   // backend re-scored with ground truth
-			AppState._fieldPending = true;
+			const backend = (await ApiClient.reports()).map(normalizeReport);
+			AppState.reports = mergeLocalReports(backend);
+			AppState.zones = mergeGroundTruth((await ApiClient.zones()).map(normalizeZone));
 			return;
 		} catch (error) { AppState.backendConnected = false; }
 	}
-	report.time = report.time || (new Date().toLocaleTimeString('en-IN', { hour12: false }) + ' IST');
-	SeedReports.add(report);
-	AppState.reports = SeedReports.list();
-	registerFieldAdjust(report);
-	AppState.previousZones = AppState.zones.map(z => ({ ...z }));
+	AppState.reports = mergeLocalReports(SeedReports.list());
 	AppState.zones = AppState.baseline.map(computeRisk);
-	AppState._fieldPending = true;
-	AppState._skipJitterUntil = Date.now() + 9000;
 }
 
 function showToast(message) { const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 3000); }
@@ -379,12 +436,39 @@ function switchView(view) {
 	if (view === 'sources') Dashboard.renderSources(AppState);
 }
 
+function persistAcks() { Persist.set('acks', AppState.acks || {}); }
+
+// The header ↻ button: clear the scenario AND the demo's local state
+// (field reports, their score effect, acknowledgements) for a clean run.
+async function resetDemo() {
+	AppState.fieldAdjust = {}; AppState.acks = {}; AppState._localReports = [];
+	Persist.clear('fieldAdjust'); Persist.clear('acks'); Persist.clear('reports');
+	AppState.scenario = 'Normal'; AppState.rainfallBoost = 0; AppState.moistureBoost = 0;
+	AppState._skipJitterUntil = 0;
+	if (AppState.backendConnected) { try { await ApiClient.clearReports(); } catch (e) {} await bootstrap(); }
+	else { AppState.reports = SeedReports.list(); AppState.zones = AppState.baseline.map(computeRisk); renderState(); }
+	showToast('Demo reset — scenario, field reports and acknowledgements cleared.');
+}
+
+async function updateReport(id, status) {
+	const local = String(id).startsWith('local-') || !Number.isFinite(Number(id));
+	if (local) {
+		AppState._localReports = (AppState._localReports || []).map(r => r.id === id ? { ...r, status } : r);
+		Persist.set('reports', AppState._localReports);
+		AppState.reports = mergeLocalReports(AppState.backendConnected ? await ApiClient.reports().catch(() => []) : SeedReports.list());
+	} else {
+		try { await ApiClient.updateReport(Number(id), status); } catch (e) {}
+		AppState.reports = mergeLocalReports((await ApiClient.reports().catch(() => [])).map(normalizeReport));
+		AppState.zones = mergeGroundTruth((await ApiClient.zones().catch(() => AppState.zones)).map(normalizeZone));
+	}
+	renderState();
+	showToast(`Report marked ${status}.`);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-	AppState.zones = AppState.baseline.map(computeRisk);
-	Dashboard.init({
-		selectZone, applyScenario, switchView, showToast, submitReport,
-		updateReport: async (id, status) => { await ApiClient.updateReport(id, status); AppState.reports = (await ApiClient.reports()).map(normalizeReport); AppState.zones = (await ApiClient.zones()).map(normalizeZone); renderState(); showToast(`Report marked ${status}.`); }
-	});
+	AppState.zones = mergeGroundTruth(AppState.baseline.map(computeRisk));
+	AppState.reports = mergeLocalReports(SeedReports.list());
+	Dashboard.init({ selectZone, applyScenario, switchView, showToast, submitReport, updateReport, resetDemo, persistAcks });
 	MapView.init(selectZone);
 	bootstrap();
 	loadWeather();

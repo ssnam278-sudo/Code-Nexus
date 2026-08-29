@@ -7,7 +7,7 @@ const Dashboard = (() => {
 		actions = callbacks;
 		document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => actions.switchView(item.dataset.view)));
 		document.querySelectorAll('[data-view-target]').forEach(item => item.addEventListener('click', () => actions.switchView(item.dataset.viewTarget)));
-		$('demo-button').addEventListener('click', runDemo); $('refresh-button').addEventListener('click', () => actions.applyScenario('Normal')); $('zone-details-button').addEventListener('click', () => actions.switchView('intelligence')); $('report-form').addEventListener('submit', submitReport); if (!$('report-media')) { const label = document.createElement('label'); label.textContent = 'EVIDENCE PHOTO / VIDEO'; label.innerHTML += '<input id="report-media" type="file" accept="image/*,video/*">'; $('report-form').insertBefore(label, $('report-form').querySelector('.brief-action')); } if (!$('ai-comparison')) { const panel = document.createElement('section'); panel.id = 'ai-comparison'; panel.className = 'ai-comparison panel'; panel.innerHTML = '<div class="section-head"><div><p class="kicker">DECISION SUPPORT</p><h2>AI vs baseline</h2></div><span id="ai-review-badge" class="comparison-badge">SYNCING</span></div><div id="ai-comparison-body"></div>'; document.querySelector('.incident-brief')?.after(panel); }
+		$('demo-button').addEventListener('click', runDemo); $('refresh-button').addEventListener('click', () => (actions.resetDemo ? actions.resetDemo() : actions.applyScenario('Normal'))); $('zone-details-button').addEventListener('click', () => actions.switchView('intelligence')); $('report-form').addEventListener('submit', submitReport); if (!$('report-media')) { const label = document.createElement('label'); label.textContent = 'EVIDENCE PHOTO / VIDEO'; label.innerHTML += '<input id="report-media" type="file" accept="image/*,video/*">'; $('report-form').insertBefore(label, $('report-form').querySelector('.brief-action')); } if (!$('ai-comparison')) { const panel = document.createElement('section'); panel.id = 'ai-comparison'; panel.className = 'ai-comparison panel'; panel.innerHTML = '<div class="section-head"><div><p class="kicker">DECISION SUPPORT</p><h2>AI vs baseline</h2></div><span id="ai-review-badge" class="comparison-badge">SYNCING</span></div><div id="ai-comparison-body"></div>'; document.querySelector('.incident-brief')?.after(panel); }
 	}
 	function runDemo() { const button = $('demo-button'); button.disabled = true; button.innerHTML = '<span>●</span> Monitoring escalation'; actions.applyScenario('Normal'); setTimeout(() => actions.applyScenario('Heavy Rain'), 1500); setTimeout(() => actions.applyScenario('Extreme Rain'), 3300); setTimeout(() => { button.disabled = false; button.innerHTML = '<span>▶</span> Run escalation demo'; }, 5100); }
 	const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
@@ -458,6 +458,7 @@ const Dashboard = (() => {
 		}).join('');
 		document.querySelectorAll('#alert-list [data-ack]').forEach(btn => btn.addEventListener('click', () => {
 			state.acks[btn.dataset.ack] = { by:'Duty Officer', at:new Date().toLocaleTimeString('en-IN', { hour12:false, hour:'2-digit', minute:'2-digit' }) };
+			if (actions && actions.persistAcks) actions.persistAcks();
 			renderAlerts(state);
 			if (actions && actions.showToast) actions.showToast('Alert acknowledged by Duty Officer.');
 		}));
@@ -465,7 +466,37 @@ const Dashboard = (() => {
 	function renderPriority(state) { const priority = [...(state.zones || [])].sort((a,b) => (num(b.score) * .65 + num(b.exposure) * .35) - (num(a.score) * .65 + num(a.exposure) * .35)); $('priority-list').innerHTML = priority.slice(0,3).map((zone,index) => { const lvl = safeLevel(zone); return `<div class="priority-row"><strong>0${index + 1}</strong><div><b>${zone.name || '—'}</b><small>${lvl.toUpperCase()} · ${Math.round(num(zone.exposure))}% exposure</small></div><em>${lvl === 'Critical' || lvl === 'High' ? 'VERIFY NOW' : 'MONITOR'}</em></div>`; }).join(''); }
 	function renderIntelligence(state) { $('intelligence-zone-list').innerHTML = (state.zones || []).map(zone => `<div class="intelligence-zone" data-zone-intel="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><b>${Math.round(num(zone.score))}</b></div>`).join(''); document.querySelectorAll('[data-zone-intel]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zoneIntel))); const zone = current(state) || {}; $('intelligence-detail').innerHTML = `<p class="kicker">SELECTED ZONE / ${String(zone.district || '—').toUpperCase()}</p><h2>${zone.name || '—'}</h2><p>${explanation(zone)}</p><div class="factor-list">${factors(zone).map(item => `<div class="factor"><span>${item.label}</span><strong>${item.value}<b>${item.weight}</b></strong></div>`).join('')}</div>`; }
 	function renderAlertsPage(state) { $('all-alerts').innerHTML = (state.zones || []).map(zone => `<div class="all-alert-row"><i class="dot ${levelClass(safeLevel(zone))}"></i><div><strong>${zone.name || '—'}</strong><small>Risk ${Math.round(num(zone.score))} · ${num(zone.rainfall).toFixed(1)} mm/hr · ${Math.round(num(zone.moisture))}% soil moisture</small></div><b>${safeLevel(zone).toUpperCase()}</b></div>`).join(''); $('all-priority').innerHTML = (state.zones || []).slice().sort((a,b) => num(b.score) - num(a.score)).map((zone,index) => { const lvl = safeLevel(zone); return `<div class="all-alert-row"><strong>0${index+1}</strong><div><strong>${zone.name || '—'}</strong><small>${Math.round(num(zone.exposure))}% exposure</small></div><b>${lvl === 'Critical' || lvl === 'High' ? 'IMMEDIATE VERIFICATION' : 'MONITOR'}</b></div>`; }).join(''); }
-	function renderReports(state) { $('report-list').innerHTML = (state.reports || []).map(report => `<div class="report-row"><div><strong>${report.location || '—'}</strong><small>${report.observation || ''}</small><small>${report.time || '—'} · ${report.status || 'Submitted'}</small></div><select class="report-status" data-report-id="${report.id || ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${String(report.severity || 'Advisory').toUpperCase()}</b></div>`).join(''); document.querySelectorAll('.report-status[data-report-id]').forEach(select => select.addEventListener('change', () => actions.updateReport(Number(select.dataset.reportId), select.value))); }
-	async function submitReport(event) { event.preventDefault(); const media = $('report-media').files[0]; const report = { zone_id:AppState.selectedZoneId, location:$('report-location').value, observation:$('report-observation').value || 'Ground observation submitted for review.', severity:$('report-severity').value, timestamp:new Date().toISOString(), status:'Under review', media_type:media ? media.type : null, media_name:media ? media.name : null }; if (navigator.geolocation) await new Promise(resolve => navigator.geolocation.getCurrentPosition(position => { report.latitude = position.coords.latitude; report.longitude = position.coords.longitude; report.accuracy_m = position.coords.accuracy; resolve(); }, resolve, { enableHighAccuracy:true, timeout:5000, maximumAge:60000 })); await actions.submitReport(report); $('report-form').reset(); renderReports(AppState); actions.showToast('Field report entered into the verification queue.'); }
+	// keep the field-report Location dropdown in sync with the real zone list
+	function syncReportLocations(state) {
+		const sel = $('report-location'); if (!sel) return;
+		const zones = (state && state.zones) || [];
+		if (!zones.length) return;
+		const want = zones.map(z => z.id).join(',');
+		if (sel.dataset.zoneKey === want) return;
+		const keep = sel.value;
+		sel.innerHTML = zones.map(z => `<option value="${z.id}">${z.name}</option>`).join('');
+		sel.dataset.zoneKey = want;
+		if (zones.some(z => z.id === keep)) sel.value = keep;
+		else if (state.selectedZoneId) sel.value = state.selectedZoneId;
+	}
+	function renderReports(state) {
+		syncReportLocations(state);
+		$('report-list').innerHTML = (state.reports || []).map(report => `<div class="report-row"><div><strong>${report.location || '—'}</strong><small>${report.observation || ''}</small><small>${report.time || '—'} · ${report.status || 'Submitted'}</small></div><select class="report-status" data-report-id="${report.id ?? ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${String(report.severity || 'Advisory').toUpperCase()}</b></div>`).join('');
+		document.querySelectorAll('.report-status[data-report-id]').forEach(select => select.addEventListener('change', () => actions.updateReport(select.dataset.reportId, select.value)));
+	}
+	async function submitReport(event) {
+		event.preventDefault();
+		const media = $('report-media').files[0];
+		const sel = $('report-location');
+		const zoneId = (sel && sel.value) || AppState.selectedZoneId;
+		const locationName = (sel && sel.selectedOptions[0] && sel.selectedOptions[0].textContent) || zoneId;
+		const report = { zone_id: zoneId, location: locationName, observation: $('report-observation').value || 'Ground observation submitted for review.', severity: $('report-severity').value, timestamp: new Date().toISOString(), status: 'Under review', media_type: media ? media.type : null, media_name: media ? media.name : null };
+		if (navigator.geolocation) await new Promise(resolve => navigator.geolocation.getCurrentPosition(position => { report.latitude = position.coords.latitude; report.longitude = position.coords.longitude; report.accuracy_m = position.coords.accuracy; resolve(); }, resolve, { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 }));
+		await actions.submitReport(report);
+		$('report-observation').value = '';
+		if ($('report-media')) $('report-media').value = '';
+		renderReports(AppState);
+		actions.showToast(`Field report logged for ${locationName}.`);
+	}
 	return { init, render, renderIntelligence, renderAlertsPage, renderReports, renderSources };
 })();

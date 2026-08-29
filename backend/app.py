@@ -834,6 +834,17 @@ def live_tick() -> Any:
         return jsonify({"error": "tick failed", "detail": str(error)}), 502
 
 
+@app.delete("/api/reports")
+@app.post("/api/reports/clear")
+def clear_reports() -> Any:
+    """Demo/dev reset — wipe all field reports. Honours INGEST_API_KEY when set."""
+    configured_key = app.config["INGEST_API_KEY"]
+    if configured_key and request.headers.get("X-Ingest-Key") != configured_key:
+        return jsonify({"error": "invalid ingestion key"}), 401
+    removed = store.clear_field_reports()
+    return jsonify({"cleared": removed})
+
+
 @app.post("/api/alerts/dispatch-test")
 def dispatch_test() -> Any:
     """Send a sample Telegram alert so operators can verify the wiring.

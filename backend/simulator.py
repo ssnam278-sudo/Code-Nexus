@@ -213,6 +213,12 @@ class DataStore:
 			cursor = connection.execute("INSERT INTO simulation_events (scenario, rainfall_boost, moisture_boost, created_at) VALUES (?, ?, ?, ?)", (event["scenario"], event["rainfall_boost"], event["moisture_boost"], self.timestamp()))
 			return int(cursor.lastrowid)
 
+	def clear_field_reports(self) -> int:
+		"""Delete every field report (demo / dev reset). Returns rows removed."""
+		with self.connection() as connection:
+			cursor = connection.execute("DELETE FROM field_reports")
+			return cursor.rowcount
+
 	def save_risk_history(self, risk: Mapping[str, Any]) -> int:
 		with self.connection() as connection:
 			cursor = connection.execute("INSERT INTO risk_history (zone_id, risk_score, risk_level, confidence, recorded_at) VALUES (?, ?, ?, ?, ?)", (risk["zone_id"], risk["risk_score"], risk["risk_level"], risk["confidence"], risk.get("recorded_at", self.timestamp())))

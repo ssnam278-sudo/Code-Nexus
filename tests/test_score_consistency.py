@@ -25,6 +25,21 @@ class ScoreConsistencyTests(unittest.TestCase):
             expected = _risk_record(record, "Heavy Rain")
             self.assertEqual(result["risk_score"], expected["risk_score"], result["zone_id"])
 
+    def test_field_report_binds_to_its_zone_and_clears(self):
+        self.client.post("/api/reports/clear")
+        r = self.client.post("/api/reports", json={
+            "zone_id": "garo", "location": "South Garo Hills",
+            "observation": "fresh scarp", "severity": "Critical", "status": "Under review",
+        })
+        self.assertEqual(r.status_code, 201)
+        garo = self.client.get("/api/risk?zone_id=garo").get_json()
+        tawang = self.client.get("/api/risk?zone_id=tawang").get_json()
+        self.assertIsNotNone(garo.get("ground_truth"), "report must adjust its own zone")
+        self.assertIsNone(tawang.get("ground_truth"), "report must not touch other zones")
+        cleared = self.client.delete("/api/reports").get_json()
+        self.assertGreaterEqual(cleared["cleared"], 1)
+        self.assertIsNone(self.client.get("/api/risk?zone_id=garo").get_json().get("ground_truth"))
+
     def test_live_forecast_now_uses_unified_score(self):
         records = [z for z in _zone_records() if all(k in z for k in ("slope", "susceptibility", "history", "coordinates"))]
         # feed the overlay a fake hazard payload and confirm it rewrites now-scores
