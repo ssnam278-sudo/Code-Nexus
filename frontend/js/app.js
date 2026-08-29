@@ -297,6 +297,11 @@ async function bootstrap() {
 		AppState.zones = AppState.baseline.map(computeRisk);
 		showToast('Offline mode: scores computed locally with the same formula.');
 	}
+	// Re-merge the browser Open-Meteo pull every cycle. On Vercel the serverless
+	// SQLite lives in a per-invocation /tmp, so /api/zones always reads back
+	// "simulated" — the browser feed is what makes the dashboard live, and it
+	// must survive each bootstrap refresh instead of being clobbered by it.
+	applyWeather();
 	renderState();
 }
 
@@ -385,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	loadWeather();
 	connectRealtimeStream();
 	setInterval(() => {
+		loadWeather();   // refresh the browser Open-Meteo pull (cache-backed, cheap within its 10 min TTL)
 		if (AppState.backendConnected) { bootstrap(); return; }
 		if (AppState.liveWeather || AppState.scenario !== 'Normal' || Date.now() <= (AppState._skipJitterUntil || 0)) return;
 		AppState.previousZones = AppState.zones.map(z => ({ ...z }));
