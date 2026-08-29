@@ -314,6 +314,8 @@ const Dashboard = (() => {
 			: flags.soil === 'open-meteo' ? 'LIVE · Open-Meteo'
 			: flags.soil === 'partial' ? 'PARTIAL LIVE' : 'SIMULATED';
 		$('src-soil-status').textContent = soilLabel;
+		if ($('src-contract-soil')) $('src-contract-soil').textContent =
+			flags.soil === 'nasa-power' ? 'NASA POWER' : flags.soil === 'simulated' ? 'simulated' : 'Open-Meteo';
 		if ($('src-soil-sub')) $('src-soil-sub').textContent = flags.soil === 'nasa-power'
 			? `NASA POWER GWETTOP (daily, ~2–5 day lag); Open-Meteo cross-check${age}`
 			: flags.soil === 'open-meteo' ? `Open-Meteo 0–7 cm soil moisture (live)${age}`
