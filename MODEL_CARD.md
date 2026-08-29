@@ -8,8 +8,28 @@ slope as a bounded 0–100 score with four operational levels
 motivated heuristic**, not a machine-learned classifier — every term is a named
 quantity with a citation.
 
-`backend/rainfall_model.py` is the model. `backend/risk_engine.py` keeps the
-older flat weighted-sum as a labelled baseline for comparison.
+`backend/rainfall_model.py` is the model. `backend/risk_engine.py` is the
+transparent flat weighted-sum shown in the dashboard's **Risk score formula**
+panel (`risk = Σ wᵢ·xᵢ`); its weight table is `WEIGHTS` and every factor's
+weight, normalised input and point contribution is returned in
+`contributing_factors`.
+
+### Confidence
+
+`confidence` is **not** a fixed number. `risk_engine.derive_confidence()`
+computes it from real signals and returns an itemised `confidence_basis`:
+
+| Driver | Effect |
+| --- | --- |
+| Live Open-Meteo feed, fresh (< 90 min) | +18 |
+| Live feed, 1.5–3 h old / > 3 h old | +9 / +2 |
+| Simulated inputs (no live feed) | +0 |
+| Current rainfall, 24 h accumulation and soil moisture agree | +7 |
+| Rainfall spike not yet reflected in soil / accumulation | −11 |
+| All seven inputs present and in range | +4 |
+| Corroborating field report (added in `apply_ground_truth`) | +6…+12 |
+
+Base 72, clamped to 40–97.
 
 ## Inputs
 

@@ -6,13 +6,19 @@ import json
 import math
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, request, send_from_directory
 
 from .alerts import ALERT_STATES, build_alert, priority_queue
-from .alert_dispatch import dispatch as dispatch_alert
+from .alert_dispatch import (
+    dispatch as dispatch_alert,
+    send_telegram_message,
+    telegram_configured,
+    webhook_configured,
+)
 from .cap import build_cap_alert, to_xml as cap_to_xml
 from .data_connectors import source_register
 from .live_hazard import all_live_hazards, zone_live_hazard
@@ -21,7 +27,7 @@ from .live_store import LiveStore
 from .open_meteo import fetch_current
 from .realtime import publish, stream, subscribe, unsubscribe
 from .replay import EVENTS as REPLAY_EVENTS, run_replay
-from .simulator import DataStore, SCENARIO_BOOSTS, simulate_zone
+from .simulator import DataStore, SCENARIO_BOOSTS, apply_ground_truth, simulate_zone
 from .thresholds import operational_level, threshold_for
 
 
@@ -56,6 +62,19 @@ def add_cors_headers(response: Any) -> Any:
     return response
 
 
+def _seconds_since(iso_timestamp: str | None) -> float | None:
+    """Whole seconds between an ISO8601 timestamp and now (UTC). None if unparseable."""
+    if not iso_timestamp:
+        return None
+    try:
+        when = datetime.fromisoformat(str(iso_timestamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return round((datetime.now(timezone.utc) - when).total_seconds())
+
+
 # DEM + inventory derived terrain/history, loaded once from the committed cache.
 _PROFILES: dict[str, dict[str, Any]] = {}
 
@@ -75,17 +94,23 @@ def _load_profiles() -> None:
 def _zone_records() -> list[dict[str, Any]]:
     datasets = store.load_all_datasets()
 
-    sensors = {
+    # sensors.json is the simulated fallback; current_sensors holds anything that
+    # actually arrived live (Open-Meteo sync or POST /api/ingest/telemetry).
+    simulated_sensors = {
         sensor["zone_id"]: sensor
         for sensor in datasets["sensors"]
     }
-    sensors.update(store.current_sensors())
+    live_sensors = store.current_sensors()
 
     records = []
 
     for zone in datasets["zones"]:
-        sensor = sensors.get(zone["id"], {})
+        is_live = zone["id"] in live_sensors
+        sensor = live_sensors.get(zone["id"]) or simulated_sensors.get(zone["id"], {})
         profile = _PROFILES.get(zone["id"], {})
+
+        observed_at = sensor.get("recorded_at") if is_live else None
+        feed_age = _seconds_since(observed_at) if observed_at else None
 
         records.append(
             {
@@ -107,6 +132,10 @@ def _zone_records() -> list[dict[str, Any]]:
                 "accumulated": sensor.get(
                     "accumulated_rainfall", 0
                 ),
+                # provenance for the UI real-vs-simulated labelling + confidence
+                "data_source": "open-meteo" if is_live else "simulated",
+                "observed_at": observed_at,
+                "feed_age_seconds": feed_age,
             }
         )
 
@@ -133,13 +162,27 @@ def _risk_record(
     zone: dict[str, Any],
     scenario: str = "Normal",
 ) -> dict[str, Any]:
-    result = simulate_zone(zone, scenario)
+    meta = {
+        "data_source": zone.get("data_source"),
+        "feed_age_seconds": zone.get("feed_age_seconds"),
+    }
+    result = simulate_zone(zone, scenario, meta)
 
-    return {
+    # A recent High/Critical field report is ground truth: it bumps (or, when
+    # verified critical, overrides) the model score for this zone.
+    ground_truth = apply_ground_truth(result, store.latest_field_report(zone["id"]))
+
+    record = {
         "zone_id": zone["id"],
         "operational_level": operational_level(result["risk_score"], zone.get("district")),
+        "data_source": zone.get("data_source", "simulated"),
+        "observed_at": zone.get("observed_at"),
+        "feed_age_seconds": zone.get("feed_age_seconds"),
         **result,
     }
+    if ground_truth:
+        record["ground_truth"] = ground_truth
+    return record
 
 
 def _circle_polygon(
@@ -351,6 +394,8 @@ def index() -> Any:
 
 @app.get("/api/health")
 def health() -> Any:
+    records = _zone_records()
+    live = sum(1 for zone in records if zone.get("data_source") == "open-meteo")
     return jsonify(
         {
             "status": "ok",
@@ -360,6 +405,16 @@ def health() -> Any:
             "database": str(
                 store.database_path.name
             ),
+            "rainfall_feed": {
+                "provider": "Open-Meteo",
+                "zones_live": live,
+                "zones_total": len(records),
+                "zones_simulated": len(records) - live,
+            },
+            "alert_dispatch": {
+                "telegram_configured": telegram_configured(),
+                "webhook_configured": webhook_configured(),
+            },
         }
     )
 
@@ -374,6 +429,8 @@ def zones() -> Any:
             "risk_score": risk["risk_score"],
             "risk_level": risk["risk_level"],
             "confidence": risk.get("confidence", 95),
+            "confidence_basis": risk.get("confidence_basis", []),
+            "ground_truth": risk.get("ground_truth"),
         })
     return jsonify(records)
 
@@ -609,6 +666,31 @@ def _live_zones() -> list[dict[str, Any]]:
     ]
 
 
+def _dispatch_on_escalation(zone: dict[str, Any], risk: dict[str, Any]) -> dict[str, Any] | None:
+    """Send a real alert when a simulated result crosses into High/Critical.
+
+    Shares the ``live_alert_state`` dedupe table with the live cycle, so the
+    "Run escalation demo" button fires each channel exactly once per crossing.
+    Set ``CODENEXUS_ALERT_ON_SIM=0`` to disable.
+    """
+    if os.getenv("CODENEXUS_ALERT_ON_SIM", "1").lower() not in {"1", "true", "yes"}:
+        return None
+    hz = {
+        "now": {
+            "risk_level": risk["risk_level"],
+            "risk_score": int(risk["risk_score"]),
+            "method": risk.get("explanation", "Weighted risk engine (scenario)"),
+        },
+        "forecast": {},
+    }
+    try:
+        result = dispatch_alert(live_store, zone, hz)
+        return result if result.get("dispatched") else None
+    except (KeyError, TypeError, ValueError, OSError) as exc:  # pragma: no cover - defensive
+        print(f"[alert_dispatch] sim escalation failed for {zone.get('id')}: {exc}", flush=True)
+        return None
+
+
 def _run_live_cycle(refresh: bool = True) -> dict[str, Any]:
     """One real-time step: pull rainfall, recompute hazard, dispatch escalations."""
     zones = _live_zones()
@@ -654,6 +736,30 @@ def live_tick() -> Any:
         return jsonify(_run_live_cycle(refresh=True))
     except (OSError, RuntimeError) as error:
         return jsonify({"error": "tick failed", "detail": str(error)}), 502
+
+
+@app.post("/api/alerts/dispatch-test")
+def dispatch_test() -> Any:
+    """Send a sample Telegram alert so operators can verify the wiring.
+
+    Honours ``INGEST_API_KEY`` (header ``X-Ingest-Key``) when it is configured.
+    """
+    configured_key = app.config["INGEST_API_KEY"]
+    if configured_key and request.headers.get("X-Ingest-Key") != configured_key:
+        return jsonify({"error": "invalid ingestion key"}), 401
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    text = (
+        "\U0001f9ea <b>Code Nexus - test alert</b>\n"
+        "Telegram dispatch is wired correctly. No landslide risk is implied.\n"
+        f"<i>{stamp}</i>"
+    )
+    delivered = send_telegram_message(text)
+    if delivered is None:
+        return jsonify({
+            "telegram": "skipped",
+            "reason": "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set",
+        })
+    return jsonify({"telegram": "sent" if delivered else "failed"}), (200 if delivered else 502)
 
 
 @app.get("/api/sensor-updates")
@@ -805,6 +911,8 @@ def run_simulation() -> Any:
 
         store.save_alert(alert)
 
+        _dispatch_on_escalation(zone, result)
+
     return jsonify(
         {
             "scenario": scenario,
@@ -865,7 +973,7 @@ def create_report() -> Any:
         ), 400
 
     try:
-        _find_zone(
+        zone = _find_zone(
             payload["zone_id"]
         )
 
@@ -878,6 +986,28 @@ def create_report() -> Any:
         payload
     )
 
+    ground_truth = None
+    severity = str(payload.get("severity") or "")
+    if severity in {"High", "Critical"}:
+        # Log the ground-truth verification as an audit row so it shows up in
+        # GET /api/alerts alongside model-generated alerts.
+        risk_after = _risk_record(zone)
+        ground_truth = risk_after.get("ground_truth")
+        store.save_alert(
+            {
+                "zone_id": zone["id"],
+                "level": "GroundTruth",
+                "title": "Field verification",
+                "reason": (
+                    f"{severity} field report from {payload.get('location', zone['id'])}: "
+                    f"{payload.get('observation', '')}"[:280]
+                ),
+                "recommended_action": "Review against model; adjust response posture.",
+                "risk_score": int(risk_after.get("risk_score", 0)),
+                "status": "Logged",
+            }
+        )
+
     return jsonify(
         {
             "id": report_id,
@@ -885,6 +1015,7 @@ def create_report() -> Any:
                 "status",
                 "Submitted",
             ),
+            "ground_truth": ground_truth,
         }
     ), 201
 

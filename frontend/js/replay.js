@@ -105,7 +105,7 @@
       if (isControl) { leadNum = 'No alert'; leadLbl = 'peak score ' + r.peak_score + ' · no false alarm'; }
       else if (r.lead_time_hours != null) {
         leadNum = fmtLead(r.lead_time_hours);
-        leadLbl = 'of warning at HIGH before failure' +
+        leadLbl = 'the engine would have flagged HIGH before the real failure' +
           (r.critical_lead_time_hours != null ? '  ·  CRITICAL ' + fmtLead(r.critical_lead_time_hours) + ' before' : '');
       } else { leadNum = 'Missed'; leadLbl = 'no warning before failure'; }
 

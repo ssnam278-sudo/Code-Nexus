@@ -9,11 +9,12 @@ swap in for operational use. All "live now" sources are **free and keyless**.
 
 | | |
 | --- | --- |
-| **Used in** | `backend/live_ingest.py`, `backend/open_meteo.py` |
+| **Used in** | `backend/live_ingest.py`, `backend/open_meteo.py`, `frontend/js/weather.js` (browser) |
 | **Provider** | Open-Meteo Forecast API |
 | **Endpoint** | `https://api.open-meteo.com/v1/forecast` |
-| **Params** | `hourly=precipitation,precipitation_probability` · `past_days=16` · `forecast_days=7` · `timezone=UTC` |
+| **Params** | `hourly=precipitation,precipitation_probability` · `past_days=16` · `forecast_days=7` · `timezone=UTC` (live-ingest); `current=temperature_2m,precipitation,rain,relative_humidity_2m,soil_moisture_0_to_7cm` (`open_meteo.py`) |
 | **Extracts** | hourly precipitation (mm), precipitation probability (%) — 16 days observed + 7 days forecast, per zone lat/lon |
+| **Live vs simulated** | `/api/zones` and `/api/risk` tag every zone `data_source: "open-meteo" \| "simulated"` with `observed_at` + `feed_age_seconds`; the dashboard shows a `LIVE`/`SIM` badge per telemetry value and drives the confidence model. A zone is `simulated` until a real reading lands in `current_sensors` (Open-Meteo sync or `POST /api/ingest/telemetry`). |
 | **Docs** | https://open-meteo.com/en/docs |
 | **Licence** | CC-BY 4.0, no API key |
 | **Underlying models** | ECMWF IFS + DWD ICON + NOAA GFS blend |
@@ -142,6 +143,20 @@ swap in for operational use. All "live now" sources are **free and keyless**.
 | **Used in** | `backend/cap.py` |
 | **Standard** | OASIS **Common Alerting Protocol (CAP) 1.2** — http://docs.oasis-open.org/emergency/cap/v1.2/CAP-v1.2.html |
 | **India platform** | NDMA **SACHET** / CAP-India — https://sachet.ndma.gov.in/ |
+
+---
+
+## 11. Real alert dispatch — Telegram
+
+| | |
+| --- | --- |
+| **Used in** | `backend/alert_dispatch.py` (`send_telegram_message`), fired from `backend/app.py` `_run_live_cycle` / `_dispatch_on_escalation` |
+| **Provider** | Telegram Bot API |
+| **Endpoint** | `https://api.telegram.org/bot<token>/sendMessage` |
+| **Secrets** | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — environment variables only, never in the repo. Setup: `TELEGRAM_SETUP.md` |
+| **Licence / cost** | Free, no card. Bot created via `@BotFather` |
+| **Trigger** | first upward crossing of a zone into High/Critical (de-duped via the `live_alert_state` table); also `POST /api/alerts/dispatch-test` |
+| **Alt.** | `ALERT_WEBHOOK_URL` — generic JSON webhook (Slack / Discord / any endpoint) |
 
 ---
 

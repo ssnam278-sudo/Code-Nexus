@@ -22,8 +22,12 @@ const Dashboard = (() => {
 		const previous = (state.previousZones || []).find(item => item.id === zone.id) || zone;
 		const regional = zones.length ? Math.round(zones.reduce((sum, item) => sum + num(item.score), 0) / zones.length) : 0;
 		const activeAlerts = (state.alerts && state.alerts.length) ? state.alerts.length : zones.filter(item => item.level === 'High' || item.level === 'Critical').length;
-		$('updated-time').textContent = state.lastUpdated.toLocaleTimeString('en-IN', { hour12:false });
-		$('clock').textContent = `${state.lastUpdated.toLocaleTimeString('en-IN', { hour12:false })} IST`;
+		const asOf = dataAsOf(state, zones);
+		const asOfText = asOf
+			? asOf.toLocaleString('en-IN', { hour12:false, day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) + ' IST'
+			: 'no live data timestamp';
+		if ($('updated-time')) $('updated-time').textContent = asOf ? asOf.toLocaleTimeString('en-IN', { hour12:false }) : '—';
+		if ($('clock')) $('clock').textContent = asOfText;
 		animateNumber($('regional-risk'), regional);
 		animateNumber($('active-alerts'), activeAlerts);
 		$('regional-status').textContent = levelOf(regional).toUpperCase();
@@ -39,6 +43,7 @@ const Dashboard = (() => {
 		$('risk-reading').style.color = zone.level === 'Critical' ? 'var(--red)' : zone.level === 'High' ? 'var(--orange)' : 'var(--amber)';
 		$('selected-confidence').textContent = `${Math.round(num(zone.confidence, 0))}%`;
 		$('confidence-bar-fill').style.width = `${clamp(num(zone.confidence, 0), 0, 100)}%`;
+		renderConfidenceBasis(zone);
 		animateNumber($('rainfall-value'), num(zone.rainfall), 1);
 		animateNumber($('moisture-value'), num(zone.moisture));
 		animateNumber($('temperature-value'), num(zone.temperature), 1);
@@ -49,6 +54,9 @@ const Dashboard = (() => {
 		$('risk-explanation').textContent = explanation(zone);
 		renderBreakdown(zone); renderSparklines(zone); renderTelemetryMeta(zone, state); renderForecast(zone); renderFieldVerify(zone); renderComparison({ ...state, zones });
 		const feed = document.querySelector('.nav-feed'); if (feed) feed.innerHTML = `<i class="dot ${state.backendConnected ? 'green' : 'cyan'}"></i> ${state.backendConnected ? 'Flask API connected' : 'Offline prototype mode'}`;
+		const anyLive = zones.some(z => z && (z._live || z.data_source === 'open-meteo'));
+		if ($('health-score')) $('health-score').innerHTML = `${state.backendConnected ? 'OK' : 'LIMITED'} <small>STATUS</small>`;
+		if ($('health-feed')) $('health-feed').textContent = anyLive ? 'LIVE' : 'SIMULATED';
 		renderChanges(zone, previous, state); renderExposure(zone); renderZones({ ...state, zones }); renderAlerts({ ...state, zones }); renderPriority({ ...state, zones }); renderReports(state);
 	}
 	function defaultFactors(zone) {
@@ -99,15 +107,66 @@ const Dashboard = (() => {
 			{ label:'Historical events', pts:ints[3], color:'var(--teal)' }
 		];
 	}
+	// newest real data timestamp across the loaded zones (or the browser weather pull)
+	function dataAsOf(state, zones) {
+		const stamps = (zones || [])
+			.map(z => z && z.observed_at)
+			.filter(Boolean)
+			.map(s => Date.parse(s))
+			.filter(n => Number.isFinite(n));
+		if (state && state.weatherFetchedAt) {
+			const w = +new Date(state.weatherFetchedAt);
+			if (Number.isFinite(w)) stamps.push(w);
+		}
+		return stamps.length ? new Date(Math.max(...stamps)) : null;
+	}
+	function thresholdScale(zone) {
+		// bands match backend risk_engine._level: 35 Advisory / 55 High / 75 Critical
+		const bands = [['0–34', 'Monitoring'], ['35–54', 'Advisory'], ['55–74', 'High'], ['75–100', 'Critical']];
+		const mark = clamp(zone && zone.score, 0, 100);
+		return `<div class="rb-scale"><div class="rb-track"><span class="mon"></span><span class="adv"></span><span class="hi"></span><span class="cr"></span><b class="rb-marker" style="left:${mark}%"><i>${Math.round(mark)}</i></b></div><div class="rb-bands">${bands.map(b => `<span><b>${b[0]}</b> ${b[1]}</span>`).join('')}</div></div>`;
+	}
+	function renderConfidenceBasis(zone) {
+		const el = $('confidence-basis'); if (!el) return;
+		const items = Array.isArray(zone.confidence_basis) ? zone.confidence_basis : [];
+		if (!items.length) { el.innerHTML = '<li class="neu">basis unavailable in offline mode</li>'; return; }
+		el.innerHTML = items.slice(0, 4).map(it => {
+			const e = num(it.effect);
+			const cls = e > 0 ? 'pos' : e < 0 ? 'neg' : 'neu';
+			const sign = e > 0 ? `+${e}` : e < 0 ? `${e}` : '±0';
+			return `<li class="${cls}"><b>${sign}</b> ${it.factor}</li>`;
+		}).join('');
+	}
 	function renderBreakdown(zone) {
 		const el = $('factor-list'); if (!el) return;
 		el.className = 'factors risk-breakdown';
+		const cf = Array.isArray(zone.contributing_factors) ? zone.contributing_factors : null;
+		if (cf && cf.length) {
+			const maxC = Math.max(...cf.map(f => num(f.contribution)), 1);
+			const rows = cf.map(f => {
+				const pts = num(f.contribution);
+				const col = /rain|soil|moist/i.test(f.name) ? 'var(--orange)' : 'var(--teal)';
+				return `<div class="rb-row"><span class="rb-label">${f.name}</span>`
+					+ `<span class="rb-val">${Number(f.weight).toFixed(2)} × ${Math.round(num(f.value))} = ${pts.toFixed(1)}</span>`
+					+ `<i class="rb-bar"><em style="width:${clamp(pts / maxC * 100, 2, 100)}%;background:${col}"></em></i>`
+					+ `<span class="rb-input">input ${num(f.input)} ${f.input_unit || ''}${f.input_unit === 'index' ? ' (0–100)' : ''} → normalised ${Math.round(num(f.value))}</span></div>`;
+			}).join('');
+			const total = cf.reduce((a, f) => a + num(f.contribution), 0);
+			const formula = zone.formula || 'risk = Σ (weightᵢ × inputᵢ),  inputᵢ normalised 0–100';
+			el.innerHTML = `<p class="rb-head">RISK SCORE FORMULA <b>${Math.round(num(zone.score))} / 100</b></p>`
+				+ `<p class="rb-formula">${formula}</p>`
+				+ `<p class="rb-cols"><span>factor</span><span>weight × input = pts</span></p>`
+				+ rows
+				+ `<p class="rb-sum">Σ = ${total.toFixed(1)} pts → risk score ${Math.round(num(zone.score))}</p>`
+				+ thresholdScale(zone);
+			return;
+		}
+		// offline fallback: heuristic point split (no backend weights available)
 		const parts = breakdownParts(zone);
 		const rows = parts.map(p => `<div class="rb-row"><span class="rb-label">${p.label}</span><span class="rb-val">${p.pts} pts</span><i class="rb-bar"><em style="width:${clamp(p.pts / 40 * 100, 2, 100)}%;background:${p.color}"></em></i></div>`).join('');
-		const bands = [['0–35', 'Monitoring'], ['36–54', 'Advisory'], ['55–74', 'High'], ['75–100', 'Critical']];
-		const mark = clamp(zone && zone.score, 0, 100);
-		const scale = `<div class="rb-scale"><div class="rb-track"><span class="mon"></span><span class="adv"></span><span class="hi"></span><span class="cr"></span><b class="rb-marker" style="left:${mark}%"><i>${Math.round(mark)}</i></b></div><div class="rb-bands">${bands.map(b => `<span><b>${b[0]}</b> ${b[1]}</span>`).join('')}</div></div>`;
-		el.innerHTML = `<p class="rb-head">SCORE BREAKDOWN <b>${parts.reduce((a, p) => a + p.pts, 0)} / 100</b></p>${rows}${scale}`;
+		el.innerHTML = `<p class="rb-head">SCORE BREAKDOWN <b>${parts.reduce((a, p) => a + p.pts, 0)} / 100</b></p>`
+			+ `<p class="rb-formula">offline estimate — connect the API for the full weighted formula (risk = Σ wᵢ·xᵢ)</p>`
+			+ rows + thresholdScale(zone);
 	}
 	function sparkSeries(zone) {
 		const live = zone && zone._live;
@@ -150,9 +209,21 @@ const Dashboard = (() => {
 		const up = pct > 0;
 		return { text:`${up ? '↑' : '↓'} ${Math.abs(Math.round(pct))}%`, cls: up ? 'up' : 'steady' };
 	}
+	function feedAge(zone, state) {
+		if (zone && Number.isFinite(num(zone.feed_age_seconds, NaN))) return num(zone.feed_age_seconds);
+		const stamp = (zone && zone.observed_at) || (state && state.weatherFetchedAt);
+		const ms = stamp ? Date.parse(stamp) : NaN;
+		return Number.isFinite(ms) ? Math.max(0, Math.round((Date.now() - ms) / 1000)) : null;
+	}
+	function ageText(seconds) {
+		if (seconds == null) return '';
+		if (seconds < 90) return `${seconds}s ago`;
+		if (seconds < 5400) return `${Math.round(seconds / 60)} min ago`;
+		return `${(seconds / 3600).toFixed(1)} h ago`;
+	}
 	function renderTelemetryMeta(zone, state) {
-		const live = !!(zone && zone._live);
-		if (live) {
+		const live = !!(zone && (zone._live || zone.data_source === 'open-meteo'));
+		if (zone && zone._live) {
 			const s = sparkSeries(zone);
 			const badges = [pctBadge(s.rain), pctBadge(s.soil), pctBadge(s.temp), pctBadge(s.acc)];
 			document.querySelectorAll('.telemetry-item').forEach((it, i) => {
@@ -161,18 +232,26 @@ const Dashboard = (() => {
 				b.className = badges[i].cls;
 			});
 		}
+		// per-card LIVE / SIM provenance badge on rainfall, soil, temperature, accumulated
+		document.querySelectorAll('.telemetry-item').forEach(it => {
+			const label = it.querySelector('label'); if (!label) return;
+			let tag = label.querySelector('.src-tag');
+			if (!tag) { tag = document.createElement('span'); tag.className = 'src-tag'; label.appendChild(tag); }
+			tag.textContent = live ? 'LIVE' : 'SIM';
+			tag.className = `src-tag ${live ? 'live' : 'sim'}`;
+		});
+		const age = feedAge(zone, state);
 		const feed = document.querySelector('.telemetry .feed-state');
 		if (feed) {
-			if (live && state && state.weatherFetchedAt) {
-				const t = new Date(state.weatherFetchedAt).toLocaleTimeString('en-IN', { hour12:false, hour:'2-digit', minute:'2-digit' });
-				feed.innerHTML = `<i class="dot green"></i> LIVE · Open-Meteo · Last fetched ${t}`;
-			} else {
-				feed.innerHTML = `<i class="dot green"></i> FEED HEALTHY`;
-			}
+			feed.innerHTML = live
+				? `<i class="dot green"></i> LIVE · Open-Meteo${age != null ? ' · ' + ageText(age) : ''}`
+				: `<i class="dot cyan"></i> SIMULATED FEED`;
 		}
 		const srcStatus = $('src-telemetry-status'), srcSub = $('src-telemetry-sub');
 		if (srcStatus) srcStatus.textContent = live ? 'LIVE' : 'SIMULATED';
-		if (srcSub) srcSub.textContent = live ? 'Open-Meteo Weather API — updated hourly' : 'Rainfall, moisture, temperature';
+		if (srcSub) srcSub.textContent = live
+			? `Open-Meteo Weather API · observed ${age != null ? ageText(age) : 'recently'}`
+			: 'Simulated rainfall, moisture, temperature (no live feed connected)';
 	}
 	function renderForecast(zone) {
 		const cells = document.querySelectorAll('.forecast-values strong');
@@ -198,6 +277,18 @@ const Dashboard = (() => {
 	}
 	function renderFieldVerify(zone) {
 		const fv = $('field-verify'); if (!fv) return;
+		// backend ground-truth override (from /api/risk) takes precedence over the
+		// client-side offline adjustment.
+		const gt = zone.ground_truth;
+		if (gt) {
+			fv.hidden = false;
+			const ds = num(gt.delta_score), dc = num(gt.delta_confidence);
+			const verb = gt.overridden ? 'overridden by verified field report' : 'adjusted by field report';
+			fv.innerHTML = `<b>GROUND TRUTH — score ${verb}</b> — ${gt.note || 'field observation'}`
+				+ ` (${ds >= 0 ? '+' : ''}${ds} to score, ${dc >= 0 ? '+' : ''}${dc} confidence`
+				+ `${gt.location ? ' · ' + gt.location : ''})`;
+			return;
+		}
 		if (zone.fieldAdjust) {
 			fv.hidden = false;
 			const ds = num(zone.fieldAdjust.score), dc = num(zone.fieldAdjust.confidence);
@@ -239,7 +330,32 @@ const Dashboard = (() => {
 		];
 		$('changes-list').innerHTML = lines.map(l => `<div class="change-line ${l.tone}"><span>▸</span> ${l.text}</div>`).join('');
 	}
-	function renderExposure(zone) { const exposure = num(zone && zone.exposure); const assets = (AppState.infrastructure || []).filter(asset => asset.zone_id === (zone && zone.id)); $('exposed-population').textContent = assets.length ? `${(assets.reduce((sum, asset) => sum + num(asset.population_served), 0) / 1000).toFixed(1)}K` : `${(exposure * .15).toFixed(1)}K`; $('roads-at-risk').textContent = String(assets.filter(asset => asset.type === 'road').length || Math.max(1, Math.round(exposure / 28))).padStart(2,'0'); $('villages-count').textContent = String(assets.filter(asset => asset.type === 'village').length || Math.max(2, Math.round(exposure / 12))).padStart(2,'0'); $('infrastructure-count').textContent = String(assets.filter(asset => asset.criticality === 'Critical' || asset.type === 'bridge').length || Math.max(1, Math.round(exposure / 22))).padStart(2,'0'); }
+	// people, rounded and labelled as an estimate — never a spurious-precision figure
+	function roundK(people) {
+		const k = num(people) / 1000;
+		if (k >= 10) return `≈${Math.round(k)}K`;
+		if (k >= 1) return `≈${(Math.round(k * 2) / 2).toFixed(1)}K`;
+		return `≈${Math.max(0, Math.round(people / 100) * 100)}`;
+	}
+	function renderExposure(zone) {
+		const exposure = num(zone && zone.exposure);
+		const assets = (AppState.infrastructure || []).filter(asset => asset.zone_id === (zone && zone.id));
+		const pop = assets.reduce((sum, asset) => sum + num(asset.population_served), 0);
+		const exposedEl = $('exposed-population');
+		if (exposedEl) {
+			exposedEl.textContent = assets.length ? roundK(pop) : roundK(exposure * 150);
+			const label = exposedEl.nextElementSibling;
+			if (label) label.textContent = assets.length ? 'People · from asset registry' : 'People · index-based estimate';
+		}
+		$('roads-at-risk').textContent = String(assets.filter(asset => asset.type === 'road').length || Math.max(1, Math.round(exposure / 28))).padStart(2,'0');
+		$('villages-count').textContent = String(assets.filter(asset => asset.type === 'village').length || Math.max(2, Math.round(exposure / 12))).padStart(2,'0');
+		$('infrastructure-count').textContent = String(assets.filter(asset => asset.criticality === 'Critical' || asset.type === 'bridge').length || Math.max(1, Math.round(exposure / 22))).padStart(2,'0');
+		const headline = $('exposed-headline');
+		if (headline) {
+			const all = (AppState.infrastructure || []).reduce((sum, asset) => sum + num(asset.population_served), 0);
+			headline.textContent = all ? roundK(all) : '≈—';
+		}
+	}
 	function renderZones(state) { const list = document.getElementById('zone-list'); if (!list) return; list.innerHTML = (state.zones || []).map(zone => `<div class="zone-row ${zone.id === state.selectedZoneId ? 'selected' : ''}" data-zone="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><strong>${Math.round(num(zone.score))}</strong></div>`).join(''); document.querySelectorAll('[data-zone]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zone))); }
 	function renderAlerts(state) {
 		state.acks = state.acks || {};

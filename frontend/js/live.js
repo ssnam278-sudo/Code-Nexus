@@ -38,6 +38,7 @@
       '<p>Observed rainfall (last 16 days) + a 7-day forecast from Open-Meteo, run through the ' +
       'hazard model every 15 min. Lead time is when the <em>forecast</em> first crosses a level.</p></div>' +
       '<div class="live-status" id="live-status">Loading&hellip;</div>' +
+      '<div class="live-dispatch" id="live-dispatch">Alert dispatch: checking&hellip;</div>' +
       '<div id="live-list"></div>';
     main.appendChild(v);
 
@@ -54,9 +55,33 @@
         '.live-now{font:700 26px "Barlow Condensed";line-height:1}' +
         '.live-lead{font-size:12px;color:#c0562b;font-weight:600}' +
         '.live-spark{grid-column:1/-1;width:100%;height:44px}' +
-        '.live-hz{display:flex;gap:10px;font-size:10.5px;color:#6b7c81;margin-top:2px}';
+        '.live-hz{display:flex;gap:10px;font-size:10.5px;color:#6b7c81;margin-top:2px}' +
+        '.live-dispatch{font-size:11px;color:#5f7379;margin:-4px 0 14px;padding:8px 10px;border:1px solid var(--line,#d7e2e2);border-radius:6px;background:#fbfdfd}' +
+        '.live-dispatch b{color:#12525b}' +
+        '.live-dispatch button{margin-left:8px}';
       document.head.appendChild(s);
     }
+  }
+
+  function dispatchStatus() {
+    var box = document.getElementById('live-dispatch');
+    if (!box) return;
+    fetch(API + '/api/health').then(function (r) { return r.json(); }).then(function (h) {
+      var d = (h && h.alert_dispatch) || {};
+      var tg = !!d.telegram_configured;
+      box.innerHTML = 'Telegram alert dispatch: <b>' + (tg ? 'configured' : 'not configured') + '</b>' +
+        (tg
+          ? ' <button id="live-test-alert" class="ack-btn">Send test alert</button>'
+          : ' &mdash; set <code>TELEGRAM_BOT_TOKEN</code> + <code>TELEGRAM_CHAT_ID</code> (see TELEGRAM_SETUP.md)');
+      var btn = document.getElementById('live-test-alert');
+      if (btn) btn.addEventListener('click', function () {
+        btn.disabled = true; btn.textContent = 'Sending…';
+        fetch(API + '/api/alerts/dispatch-test', { method: 'POST' })
+          .then(function (r) { return r.json(); })
+          .then(function (res) { btn.textContent = res.telegram === 'sent' ? 'Sent ✓' : (res.telegram || 'failed'); })
+          .catch(function () { btn.textContent = 'failed'; });
+      });
+    }).catch(function () { box.textContent = 'Alert dispatch status needs the backend API.'; });
   }
 
   function spark(traj, nowIdx) {
@@ -130,11 +155,12 @@
 
   function boot() {
     inject();
+    dispatchStatus();
     if (typeof window.switchView === 'function' && !window.switchView.__liveWrapped) {
       var orig = window.switchView;
       window.switchView = function (v) {
         orig(v);
-        if (v === 'live') { show(); load(); clearInterval(timer); timer = setInterval(load, POLL_MS); }
+        if (v === 'live') { show(); load(); dispatchStatus(); clearInterval(timer); timer = setInterval(load, POLL_MS); }
         else { clearInterval(timer); timer = null; }
       };
       window.switchView.__liveWrapped = true;

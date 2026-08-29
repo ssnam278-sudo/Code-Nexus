@@ -17,7 +17,12 @@ services:
         value: "1"
       - key: CODENEXUS_LIVE_INGEST_SECONDS
         value: "900"
-      # optional: paste a Slack/Discord/Telegram-bot/other JSON webhook to get
-      # pushed alerts when a zone escalates to High/Critical
+      # Real alert dispatch (see TELEGRAM_SETUP.md). Set these in the Render
+      # dashboard (Environment tab) so the token stays out of the repo.
+      # - key: TELEGRAM_BOT_TOKEN
+      #   sync: false
+      # - key: TELEGRAM_CHAT_ID
+      #   sync: false
+      # optional: paste a Slack/Discord/other JSON webhook instead of / as well
       # - key: ALERT_WEBHOOK_URL
       #   value: "https://hooks.slack.com/services/XXX/YYY/ZZZ"

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -203,9 +204,26 @@ class DataStore:
 			rows = connection.execute(f"SELECT * FROM {table} ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 		return [dict(row) for row in rows]
 
+	def latest_field_report(self, zone_id: str) -> dict[str, Any] | None:
+		"""Most recent field report for a zone (any status), or None."""
+		with self.connection() as connection:
+			row = connection.execute(
+				"SELECT * FROM field_reports WHERE zone_id = ? ORDER BY id DESC LIMIT 1",
+				(zone_id,),
+			).fetchone()
+		return dict(row) if row else None
 
-def simulate_zone(zone: Mapping[str, Any], scenario: str = "Normal") -> dict[str, Any]:
-	"""Apply a scenario to zone inputs, then calculate its resulting risk."""
+
+def simulate_zone(
+	zone: Mapping[str, Any],
+	scenario: str = "Normal",
+	meta: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+	"""Apply a scenario to zone inputs, then calculate its resulting risk.
+
+	``meta`` is passed straight through to ``calculate_risk`` for the confidence
+	model (feed source / freshness).
+	"""
 	if scenario not in SCENARIO_BOOSTS:
 		raise ValueError(f"unknown scenario: {scenario}")
 	rainfall_boost, moisture_boost = SCENARIO_BOOSTS[scenario]
@@ -213,4 +231,88 @@ def simulate_zone(zone: Mapping[str, Any], scenario: str = "Normal") -> dict[str
 	simulated["rainfall"] = max(0.0, float(zone["rainfall"]) + rainfall_boost)
 	simulated["accumulated"] = max(0.0, float(zone["accumulated"]) + rainfall_boost * 1.7)
 	simulated["moisture"] = max(0.0, min(100.0, float(zone["moisture"]) + moisture_boost))
-	return {**simulated, **calculate_risk(simulated)}
+	return {**simulated, **calculate_risk(simulated, meta)}
+
+
+_NO_MOVEMENT = re.compile(
+	r"(no|nil|not any|without)\s+(observed\s+|visible\s+|fresh\s+|sign\s+of\s+)?"
+	r"(movement|slippage|slip|cracks?|displacement|subsidence|settlement)"
+	r"|slope (is )?stable|nothing observed|no change",
+	re.IGNORECASE,
+)
+_CRITICAL_SCORE = 75  # risk_engine Critical threshold
+_GROUND_TRUTH_MAX_AGE = timedelta(hours=6)
+
+
+def _report_age(report: Mapping[str, Any]) -> timedelta | None:
+	raw = report.get("timestamp") or report.get("created_at")
+	if not raw:
+		return None
+	try:
+		when = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+	except ValueError:
+		return None
+	if when.tzinfo is None:
+		when = when.replace(tzinfo=timezone.utc)
+	return datetime.now(timezone.utc) - when
+
+
+def apply_ground_truth(
+	result: dict[str, Any],
+	report: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+	"""Let a recent field report override / bump the model score for its zone.
+
+	Mirrors the client-side ``registerFieldAdjust`` (frontend/js/app.js) so the
+	online and offline behaviours match. Mutates ``result`` in place and returns
+	a ``ground_truth`` record, or ``None`` when no adjustment applies.
+	"""
+	if not report:
+		return None
+	status = str(report.get("status") or "Submitted")
+	if status == "Rejected":
+		return None
+	age = _report_age(report)
+	if age is not None and age > _GROUND_TRUTH_MAX_AGE:
+		return None
+
+	severity = str(report.get("severity") or "").lower()
+	observation = str(report.get("observation") or "")
+
+	if _NO_MOVEMENT.search(observation):
+		delta_score, delta_conf = -4, 8
+		note = "no slope movement observed on the ground"
+	elif severity == "critical":
+		delta_score, delta_conf = 13, 12
+		note = "critical ground observation confirmed by field team"
+	elif severity == "high":
+		delta_score, delta_conf = 8, 10
+		note = "high-severity ground observation confirmed"
+	else:
+		delta_score, delta_conf = 3, 6
+		note = "field observation logged"
+
+	before = int(result["risk_score"])
+	score = max(0, min(100, before + delta_score))
+	# A *verified* critical report forces at least the Critical band.
+	if severity == "critical" and status == "Verified":
+		score = max(score, _CRITICAL_SCORE)
+
+	from .risk_engine import _level  # local import avoids a cycle at module load
+
+	result["risk_score"] = score
+	result["risk_level"] = _level(score)
+	result["confidence"] = int(min(99, result.get("confidence", 75) + delta_conf))
+	basis = result.setdefault("confidence_basis", [])
+	basis.append({"factor": f"field report ({severity or 'observation'}, {status.lower()})", "effect": delta_conf})
+
+	return {
+		"severity": report.get("severity"),
+		"status": status,
+		"location": report.get("location"),
+		"observed_at": report.get("timestamp") or report.get("created_at"),
+		"delta_score": score - before,
+		"delta_confidence": delta_conf,
+		"note": note,
+		"overridden": severity == "critical" and status == "Verified",
+	}

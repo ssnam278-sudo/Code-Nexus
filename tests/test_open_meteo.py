@@ -13,7 +13,7 @@ class OpenMeteoTests(unittest.TestCase):
                 "time": "2026-08-26T08:30",
                 "temperature_2m": 32.6,
                 "precipitation": 1.2,
-                "soil_moisture_0_to_1cm": 0.33,
+                "soil_moisture_0_to_7cm": 0.33,
             },
             "hourly": {"precipitation": [0.1] * 24},
         }
@@ -27,6 +27,8 @@ class OpenMeteoTests(unittest.TestCase):
         self.assertEqual(reading["soil_moisture"], 33.0)
         self.assertEqual(reading["accumulated_rainfall"], 2.4)
         self.assertEqual(reading["provider"], "Open-Meteo")
+        self.assertEqual(reading["data_source"], "open-meteo")
+        self.assertIn("observed_at", reading)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,9 @@ def fetch_current(zone: Mapping[str, Any], timeout: float = 10.0) -> dict[str, A
     query = urlencode({
         "latitude": latitude,
         "longitude": longitude,
-        "current": "temperature_2m,precipitation,rain,relative_humidity_2m,soil_moisture_0_to_1cm",
+        # 0-7 cm soil moisture matches the depth the hazard model and the
+        # browser weather layer (frontend/js/weather.js) both use.
+        "current": "temperature_2m,precipitation,rain,relative_humidity_2m,soil_moisture_0_to_7cm",
         "hourly": "precipitation",
         "past_days": 1,
         "forecast_days": 1,
@@ -30,18 +32,24 @@ def fetch_current(zone: Mapping[str, Any], timeout: float = 10.0) -> dict[str, A
     current = payload.get("current", {})
     hourly = payload.get("hourly", {})
     precipitation = hourly.get("precipitation", [])[-24:]
-    required = ("time", "temperature_2m", "precipitation", "soil_moisture_0_to_1cm")
+    required = ("time", "temperature_2m", "precipitation", "soil_moisture_0_to_7cm")
     if any(field not in current for field in required):
         raise ValueError("Open-Meteo response is missing current weather fields")
+    recorded_at = (
+        f"{current['time']}:00+00:00" if len(str(current["time"])) == 16 else str(current["time"])
+    )
     return {
         "zone_id": zone["id"],
         "sensor_id": f"open-meteo-{zone['id']}",
         "rainfall": max(0.0, float(current["precipitation"])),
-        "soil_moisture": max(0.0, min(100.0, float(current["soil_moisture_0_to_1cm"]) * 100)),
+        "soil_moisture": max(0.0, min(100.0, float(current["soil_moisture_0_to_7cm"]) * 100)),
         "temperature": float(current["temperature_2m"]),
         "accumulated_rainfall": round(max(0.0, sum(float(value or 0) for value in precipitation)), 2),
         "status": "healthy",
-        "recorded_at": f"{current['time']}:00+00:00" if len(str(current["time"])) == 16 else str(current["time"]),
+        "recorded_at": recorded_at,
+        "observed_at": recorded_at,
+        "data_source": "open-meteo",
         "provider": "Open-Meteo",
         "provider_url": OPEN_METEO_URL,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
