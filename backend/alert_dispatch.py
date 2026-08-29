@@ -91,8 +91,20 @@ def _lead_bits(forecast: Mapping[str, Any]) -> str:
     return "; ".join(bits)
 
 
-def _messages(zone: Mapping[str, Any], level: str, now: Mapping[str, Any], forecast: Mapping[str, Any]) -> tuple[str, str]:
-    """Return (plain_text, html_text) for a single escalation."""
+def alert_messages(
+    zone: Mapping[str, Any],
+    level: str,
+    now: Mapping[str, Any],
+    forecast: Mapping[str, Any] | None = None,
+    *,
+    test: bool = False,
+) -> tuple[str, str]:
+    """Return (plain_text, html_text) for one zone alert.
+
+    ``test=True`` keeps every zone detail but swaps the banner so the recipient
+    can tell it is a wiring check, not a live warning.
+    """
+    forecast = forecast or {}
     name = zone.get("name", zone["id"])
     district = zone.get("district", "")
     score = now["risk_score"]
@@ -105,20 +117,31 @@ def _messages(zone: Mapping[str, Any], level: str, now: Mapping[str, Any], forec
     lead = _lead_bits(forecast)
     stamp = ist_stamp()
 
+    if test:
+        banner_plain = f"[Code Nexus] TEST alert - would notify: {level} risk"
+        banner_html = "\U0001f9ea <b>Code Nexus - TEST alert</b> (wiring check, no live risk)"
+    else:
+        banner_plain = f"[Code Nexus] {level} landslide risk"
+        banner_html = f"\U0001f6a8 <b>Code Nexus - {level} landslide risk</b>"
+
     plain = (
-        f"[Code Nexus] {level} landslide risk - {name} ({district}). "
+        f"{banner_plain} - {name} ({district}). "
         f"Score {score}{('; ' + lead) if lead else ''}. {action}"
     )
     html = (
-        f"\U0001f6a8 <b>Code Nexus - {level} landslide risk</b>\n"
+        f"{banner_html}\n"
         f"<b>{name}</b>{(' - ' + district) if district else ''}\n"
-        f"Risk score: <b>{score}</b>/100\n"
+        f"Risk score: <b>{score}</b>/100 ({level})\n"
         + (f"Forecast: {lead}\n" if lead else "")
         + f"Coordinates: {coord_str}\n"
         f"Action: {action}\n"
         f"<i>{stamp}</i>"
     )
     return plain, html
+
+
+# backwards-compatible alias
+_messages = alert_messages
 
 
 def dispatch(store: LiveStore, zone: Mapping[str, Any], live_hazard: Mapping[str, Any]) -> dict[str, Any]:

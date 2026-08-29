@@ -76,9 +76,14 @@
       var btn = document.getElementById('live-test-alert');
       if (btn) btn.addEventListener('click', function () {
         btn.disabled = true; btn.textContent = 'Sending…';
-        fetch(API + '/api/alerts/dispatch-test', { method: 'POST' })
+        var zid = (window.AppState && window.AppState.selectedZoneId) || '';
+        fetch(API + '/api/alerts/dispatch-test' + (zid ? '?zone_id=' + encodeURIComponent(zid) : ''), { method: 'POST' })
           .then(function (r) { return r.json(); })
-          .then(function (res) { btn.textContent = res.telegram === 'sent' ? 'Sent ✓' : (res.telegram || 'failed'); })
+          .then(function (res) {
+            btn.textContent = res.telegram === 'sent'
+              ? 'Sent ✓ ' + (res.zone || '') + ' (' + res.risk_score + ')'
+              : (res.telegram || 'failed');
+          })
           .catch(function () { btn.textContent = 'failed'; });
       });
     }).catch(function () { box.textContent = 'Alert dispatch status needs the backend API.'; });

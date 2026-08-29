@@ -15,8 +15,8 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from .alerts import ALERT_STATES, build_alert, priority_queue
 from .alert_dispatch import (
+    alert_messages,
     dispatch as dispatch_alert,
-    ist_stamp,
     send_telegram_message,
     telegram_configured,
     webhook_configured,
@@ -843,18 +843,34 @@ def dispatch_test() -> Any:
     configured_key = app.config["INGEST_API_KEY"]
     if configured_key and request.headers.get("X-Ingest-Key") != configured_key:
         return jsonify({"error": "invalid ingestion key"}), 401
-    text = (
-        "\U0001f9ea <b>Code Nexus - test alert</b>\n"
-        "Telegram dispatch is wired correctly. No landslide risk is implied.\n"
-        f"<i>{ist_stamp()}</i>"
-    )
-    delivered = send_telegram_message(text)
+
+    # Build the test message from a real zone so it shows the exact format an
+    # escalation would send, including the area. ?zone_id= picks one; otherwise
+    # the current highest-risk zone.
+    zone_id = request.args.get("zone_id")
+    records = _zone_records()
+    try:
+        zone = _find_zone(zone_id) if zone_id else max(
+            records, key=lambda z: _risk_record(z)["risk_score"]
+        )
+    except (KeyError, ValueError):
+        zone = records[0]
+    risk = _risk_record(zone)
+    now = {"risk_score": risk["risk_score"], "risk_level": risk["risk_level"]}
+    _, html = alert_messages(zone, risk["risk_level"], now, test=True)
+
+    delivered = send_telegram_message(html)
     if delivered is None:
         return jsonify({
             "telegram": "skipped",
             "reason": "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set",
         })
-    return jsonify({"telegram": "sent" if delivered else "failed"}), (200 if delivered else 502)
+    return jsonify({
+        "telegram": "sent" if delivered else "failed",
+        "zone": zone["id"],
+        "risk_score": risk["risk_score"],
+        "risk_level": risk["risk_level"],
+    }), (200 if delivered else 502)
 
 
 @app.get("/api/sensor-updates")

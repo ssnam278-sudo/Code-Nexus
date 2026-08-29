@@ -65,14 +65,29 @@ Or open the **Live forecast** tab in the dashboard and click **Send test alert**
 
 ## Message format
 
+**Real escalation:**
+
 ```
 🚨 Code Nexus - Critical landslide risk
 Tawang Corridor - Tawang, Arunachal Pradesh
-Risk score: 82/100
+Risk score: 82/100 (Critical)
 Forecast: Critical projected in ~5 h
 Coordinates: 27.5861, 91.8594
 Action: Immediate verification; consider closing the road and moving exposed residents.
 2026-08-29 12:45 IST
+```
+
+**Test alert** (`POST /api/alerts/dispatch-test`, or the "Send test alert"
+button) — same layout, real zone, clearly marked. It uses the current
+highest-risk zone, or `?zone_id=<id>` to pick one:
+
+```
+🧪 Code Nexus - TEST alert (wiring check, no live risk)
+Tawang Corridor - Tawang, Arunachal Pradesh
+Risk score: 50/100 (Advisory)
+Coordinates: 27.5861, 91.8594
+Action: Monitor.
+2026-08-29 22:15 IST
 ```
 
 Timestamps are India Standard Time via `zoneinfo` (`ZoneInfo("Asia/Kolkata")`),
