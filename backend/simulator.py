@@ -145,6 +145,15 @@ class DataStore:
 				if column not in columns:
 					connection.execute(f"ALTER TABLE field_reports ADD COLUMN {column} {definition}")
 
+			sensor_columns = {row[1] for row in connection.execute("PRAGMA table_info(current_sensors)")}
+			for column, definition in {
+				"rainfall_source": "TEXT",
+				"soil_source": "TEXT",
+				"soil_observed_at": "TEXT",
+			}.items():
+				if column not in sensor_columns:
+					connection.execute(f"ALTER TABLE current_sensors ADD COLUMN {column} {definition}")
+
 	@staticmethod
 	def timestamp() -> str:
 		return datetime.now(timezone.utc).isoformat()
@@ -173,7 +182,21 @@ class DataStore:
 
 	def upsert_current_sensor(self, reading: Mapping[str, Any]) -> None:
 		with self.connection() as connection:
-			connection.execute("INSERT INTO current_sensors (zone_id, sensor_id, rainfall, soil_moisture, temperature, accumulated_rainfall, status, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(zone_id) DO UPDATE SET sensor_id=excluded.sensor_id, rainfall=excluded.rainfall, soil_moisture=excluded.soil_moisture, temperature=excluded.temperature, accumulated_rainfall=excluded.accumulated_rainfall, status=excluded.status, recorded_at=excluded.recorded_at", (reading["zone_id"], reading["sensor_id"], reading["rainfall"], reading["soil_moisture"], reading["temperature"], reading["accumulated_rainfall"], reading.get("status", "healthy"), reading.get("recorded_at", self.timestamp())))
+			connection.execute(
+				"INSERT INTO current_sensors (zone_id, sensor_id, rainfall, soil_moisture, temperature, accumulated_rainfall, status, recorded_at, rainfall_source, soil_source, soil_observed_at) "
+				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+				"ON CONFLICT(zone_id) DO UPDATE SET sensor_id=excluded.sensor_id, rainfall=excluded.rainfall, soil_moisture=excluded.soil_moisture, temperature=excluded.temperature, "
+				"accumulated_rainfall=excluded.accumulated_rainfall, status=excluded.status, recorded_at=excluded.recorded_at, "
+				"rainfall_source=excluded.rainfall_source, soil_source=excluded.soil_source, soil_observed_at=excluded.soil_observed_at",
+				(
+					reading["zone_id"], reading["sensor_id"], reading["rainfall"], reading["soil_moisture"],
+					reading["temperature"], reading["accumulated_rainfall"], reading.get("status", "healthy"),
+					reading.get("recorded_at", self.timestamp()),
+					reading.get("rainfall_source", "open-meteo"),
+					reading.get("soil_source", "open-meteo"),
+					reading.get("soil_observed_at"),
+				),
+			)
 
 	def current_sensors(self) -> dict[str, dict[str, Any]]:
 		with self.connection() as connection:

@@ -1,10 +1,10 @@
 [
-	{"id":"tawang","name":"Tawang Corridor","district":"Tawang, Arunachal Pradesh","coordinates":[27.5861,91.8594],"base":46,"slope":72,"susceptibility":82,"history":68,"exposure":86},
-	{"id":"siang","name":"East Siang Valley","district":"Pasighat, Arunachal Pradesh","coordinates":[28.0667,95.3267],"base":38,"slope":61,"susceptibility":64,"history":54,"exposure":72},
-	{"id":"chura","name":"Churachandpur Ridge","district":"Churachandpur, Manipur","coordinates":[24.3333,93.6833],"base":31,"slope":55,"susceptibility":59,"history":48,"exposure":63},
-	{"id":"garo","name":"South Garo Hills","district":"Baghmara, Meghalaya","coordinates":[25.1980,90.6300],"base":24,"slope":43,"susceptibility":42,"history":35,"exposure":51},
-	{"id":"bomdila","name":"Bomdila Pass","district":"West Kameng, Arunachal Pradesh","coordinates":[27.2648,92.4246],"base":16,"slope":38,"susceptibility":34,"history":25,"exposure":32},
-	{"id":"ziro","name":"Ziro Valley","district":"Lower Subansiri, Arunachal Pradesh","coordinates":[27.5444,93.8197],"base":27,"slope":48,"susceptibility":47,"history":31,"exposure":58},
-	{"id":"roing","name":"Roing Foothills","district":"Lower Dibang Valley, Arunachal Pradesh","coordinates":[28.1397,95.84],"base":34,"slope":64,"susceptibility":68,"history":52,"exposure":61},
-	{"id":"ukhrul","name":"Ukhrul Ridge","district":"Ukhrul, Manipur","coordinates":[25.0968,94.3614],"base":25,"slope":51,"susceptibility":45,"history":38,"exposure":44}
+	{"id":"tawang","name":"Tawang Corridor","district":"Tawang, Arunachal Pradesh","coordinates":[27.5861,91.8594],"base":46,"slope":61.9,"susceptibility":81.8,"history":55.0,"exposure":86},
+	{"id":"siang","name":"East Siang Valley","district":"Pasighat, Arunachal Pradesh","coordinates":[28.0667,95.3267],"base":38,"slope":27.5,"susceptibility":36.1,"history":27.0,"exposure":72},
+	{"id":"chura","name":"Churachandpur Ridge","district":"Churachandpur, Manipur","coordinates":[24.3333,93.6833],"base":31,"slope":32.5,"susceptibility":41.9,"history":36.1,"exposure":63},
+	{"id":"garo","name":"South Garo Hills","district":"Baghmara, Meghalaya","coordinates":[25.1980,90.6300],"base":24,"slope":20.8,"susceptibility":21.8,"history":17.5,"exposure":51},
+	{"id":"bomdila","name":"Bomdila Pass","district":"West Kameng, Arunachal Pradesh","coordinates":[27.2648,92.4246],"base":16,"slope":47.2,"susceptibility":61.0,"history":15.5,"exposure":32},
+	{"id":"ziro","name":"Ziro Valley","district":"Lower Subansiri, Arunachal Pradesh","coordinates":[27.5444,93.8197],"base":27,"slope":29.1,"susceptibility":34.3,"history":27.9,"exposure":58},
+	{"id":"roing","name":"Roing Foothills","district":"Lower Dibang Valley, Arunachal Pradesh","coordinates":[28.1397,95.84],"base":34,"slope":41.9,"susceptibility":50.6,"history":26.0,"exposure":61},
+	{"id":"ukhrul","name":"Ukhrul Ridge","district":"Ukhrul, Manipur","coordinates":[25.0968,94.3614],"base":25,"slope":38.3,"susceptibility":44.1,"history":39.0,"exposure":44}
 ]

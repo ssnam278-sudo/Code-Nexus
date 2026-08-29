@@ -103,6 +103,13 @@
 /* --- real feeds: data-as-of, LIVE/SIM tags, transparent formula, confidence basis --- */
 .deck-asof { display:inline-flex; align-items:baseline; gap:5px; color:#9db9bb; font:9px 'Barlow Condensed'; letter-spacing:.9px; }
 .deck-asof .clock { color:#eef7f6; font-size:11px; letter-spacing:.4px; }
+/* one status badge — colour reflects the actual live/simulated mix */
+.prototype-flag.mode-live { border-color:#3f7d5c; background:#20433a; color:#8fe0b6; }
+.prototype-flag.mode-live i { background:#5cd196; }
+.prototype-flag.mode-partial { border-color:#7d7440; background:#3f3b24; color:#ecd18a; }
+.prototype-flag.mode-partial i { background:#e7b85e; }
+.prototype-flag.mode-simulated { border-color:#5a6b70; background:#2f4247; color:#a9c3c5; }
+.prototype-flag.mode-simulated i { background:#8fb0b3; }
 .src-tag { margin-left:6px; padding:1px 5px; border-radius:3px; font:600 8px 'Barlow Condensed'; letter-spacing:.6px; vertical-align:1px; }
 .src-tag.live { color:#12656e; background:#dcefee; border:1px solid #b7d8d6; }
 .src-tag.sim { color:#7c8f92; background:#eef1f1; border:1px solid #dbe3e3; }

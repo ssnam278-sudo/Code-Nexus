@@ -41,15 +41,19 @@ swap in for operational use. All "live now" sources are **free and keyless**.
 
 ---
 
-## 3. Soil moisture  (wetness cross-check)
+## 3. Soil moisture  (soil_saturation factor — LIVE)
 
 | | |
 | --- | --- |
-| **Used in** | `backend/live_ingest.py` (→ `backend/rainfall_model.py` `effective_wetness`) |
-| **Provider** | Open-Meteo Forecast API (same call as #1) |
-| **Params** | `hourly=soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm` |
-| **Extracts** | volumetric soil water content (m³/m³) at 3 near-surface layers, hourly, observed + forecast |
-| **Underlying model** | ECMWF land-surface scheme |
+| **Used in** | `backend/nasa_power.py` → `POST /api/live/open-meteo` → risk engine `soil_saturation` term |
+| **Provider** | **NASA POWER** (Prediction Of Worldwide Energy Resources) |
+| **Endpoint** | `https://power.larc.nasa.gov/api/temporal/daily/point` |
+| **Params** | `parameters=GWETTOP,GWETROOT` · `community=AG` · `start`/`end` (last 10 days) · `format=JSON` |
+| **Extracts** | `GWETTOP` surface soil wetness fraction (0–1) → ×100 %, most recent valid day per zone |
+| **Underlying model** | MERRA-2 / GEOS land assimilation |
+| **Licence / key** | Free, no key |
+| **Latency** | Daily product lags ~2–5 days ("preliminary"); reported as *latest available*, not this-hour |
+| **Cross-check** | Open-Meteo `soil_moisture_0_to_7cm` from the same sync cycle, stored as `soil_moisture_cross_check_open_meteo`; used as the fallback when NASA POWER is unreachable |
 
 **Authoritative replacement:** NASA SMAP L3/L4 soil moisture — https://smap.jpl.nasa.gov/data/ · ESA CCI Soil Moisture — https://climate.esa.int/en/projects/soil-moisture/
 

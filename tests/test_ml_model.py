@@ -17,7 +17,9 @@ class MLModelTests(unittest.TestCase):
 
     def test_returns_baseline_and_model_comparison(self):
         result = compare_risk(self.zone)
-        self.assertEqual(result["baseline"]["risk_level"], "High")
+        # heavy monsoon on very susceptible terrain -> top of the scale
+        self.assertIn(result["baseline"]["risk_level"], {"High", "Critical"})
+        self.assertGreaterEqual(result["baseline"]["risk_score"], 70)
         self.assertIn(result["model"]["prediction"], {"Monitoring", "Advisory", "High", "Critical"})
         self.assertTrue(0 <= result["model"]["confidence"] <= 100)
         self.assertEqual(len(result["model"]["top_drivers"]), 3)

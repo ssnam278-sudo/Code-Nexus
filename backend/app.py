@@ -25,6 +25,7 @@ from .data_connectors import source_register
 from .live_hazard import all_live_hazards, zone_live_hazard
 from .live_ingest import ingest_all, start_scheduler
 from .live_store import LiveStore
+from .nasa_power import fetch_soil_moisture
 from .open_meteo import fetch_current
 from .realtime import publish, stream, subscribe, unsubscribe
 from .replay import EVENTS as REPLAY_EVENTS, run_replay
@@ -112,6 +113,7 @@ def _zone_records() -> list[dict[str, Any]]:
 
         observed_at = sensor.get("recorded_at") if is_live else None
         feed_age = _seconds_since(observed_at) if observed_at else None
+        soil_source = (sensor.get("soil_source") or "open-meteo") if is_live else "simulated"
 
         records.append(
             {
@@ -135,12 +137,45 @@ def _zone_records() -> list[dict[str, Any]]:
                 ),
                 # provenance for the UI real-vs-simulated labelling + confidence
                 "data_source": "open-meteo" if is_live else "simulated",
+                "rainfall_data_source": (sensor.get("rainfall_source") or "open-meteo") if is_live else "simulated",
+                "soil_data_source": soil_source,
                 "observed_at": observed_at,
+                "soil_observed_at": sensor.get("soil_observed_at") if is_live else None,
                 "feed_age_seconds": feed_age,
             }
         )
 
     return records
+
+
+def data_mode() -> dict[str, Any]:
+    """One honest status for the whole dashboard: LIVE / PARTIAL LIVE / SIMULATED."""
+    records = _zone_records()
+    rain_live = sum(1 for z in records if z.get("rainfall_data_source") in {"open-meteo"})
+    soil_live = sum(1 for z in records if z.get("soil_data_source") in {"open-meteo", "nasa-power"})
+    total = len(records) or 1
+    if rain_live == total and soil_live == total:
+        label, mode = "LIVE DATA", "live"
+    elif rain_live or soil_live:
+        label, mode = "PARTIAL LIVE DATA", "partial"
+    else:
+        label, mode = "SIMULATED DATA", "simulated"
+    newest = max(
+        (z["feed_age_seconds"] for z in records if isinstance(z.get("feed_age_seconds"), (int, float))),
+        default=None,
+    )
+    return {
+        "mode": mode,
+        "label": label,
+        "rainfall_live_zones": rain_live,
+        "soil_live_zones": soil_live,
+        "zones_total": len(records),
+        "feed_age_seconds": newest,
+        "soil_provider": next(
+            (z["soil_data_source"] for z in records if z.get("soil_data_source") in {"nasa-power", "open-meteo"}),
+            "simulated",
+        ),
+    }
 
 
 def _find_zone(zone_id: str) -> dict[str, Any]:
@@ -165,6 +200,7 @@ def _risk_record(
 ) -> dict[str, Any]:
     meta = {
         "data_source": zone.get("data_source"),
+        "soil_data_source": zone.get("soil_data_source"),
         "feed_age_seconds": zone.get("feed_age_seconds"),
     }
     result = simulate_zone(zone, scenario, meta)
@@ -177,7 +213,10 @@ def _risk_record(
         "zone_id": zone["id"],
         "operational_level": operational_level(result["risk_score"], zone.get("district")),
         "data_source": zone.get("data_source", "simulated"),
+        "rainfall_data_source": zone.get("rainfall_data_source", "simulated"),
+        "soil_data_source": zone.get("soil_data_source", "simulated"),
         "observed_at": zone.get("observed_at"),
+        "soil_observed_at": zone.get("soil_observed_at"),
         "feed_age_seconds": zone.get("feed_age_seconds"),
         **result,
     }
@@ -395,8 +434,7 @@ def index() -> Any:
 
 @app.get("/api/health")
 def health() -> Any:
-    records = _zone_records()
-    live = sum(1 for zone in records if zone.get("data_source") == "open-meteo")
+    mode = data_mode()
     return jsonify(
         {
             "status": "ok",
@@ -406,11 +444,17 @@ def health() -> Any:
             "database": str(
                 store.database_path.name
             ),
+            "data_mode": mode,
             "rainfall_feed": {
                 "provider": "Open-Meteo",
-                "zones_live": live,
-                "zones_total": len(records),
-                "zones_simulated": len(records) - live,
+                "zones_live": mode["rainfall_live_zones"],
+                "zones_total": mode["zones_total"],
+                "zones_simulated": mode["zones_total"] - mode["rainfall_live_zones"],
+            },
+            "soil_feed": {
+                "provider": mode["soil_provider"],
+                "zones_live": mode["soil_live_zones"],
+                "zones_total": mode["zones_total"],
             },
             "alert_dispatch": {
                 "telegram_configured": telegram_configured(),
@@ -422,18 +466,9 @@ def health() -> Any:
 
 @app.get("/api/zones")
 def zones() -> Any:
-    records = []
-    for zone in _zone_records():
-        risk = _risk_record(zone)
-        records.append({
-            **zone,
-            "risk_score": risk["risk_score"],
-            "risk_level": risk["risk_level"],
-            "confidence": risk.get("confidence", 95),
-            "confidence_basis": risk.get("confidence_basis", []),
-            "ground_truth": risk.get("ground_truth"),
-        })
-    return jsonify(records)
+    # Bundle the full risk record so the dashboard needs exactly one call and
+    # every page renders the same number. There is no separate per-page score.
+    return jsonify([{**zone, **_risk_record(zone)} for zone in _zone_records()])
 
 
 @app.get("/api/sensors")
@@ -445,6 +480,8 @@ def sensors() -> Any:
 
 @app.post("/api/live/open-meteo")
 def sync_open_meteo() -> Any:
+    """Pull live rainfall (Open-Meteo) and soil moisture (NASA POWER, Open-Meteo
+    fallback) for every zone and persist them as the current sensor reading."""
     global _open_meteo_last_sync
     force = request.args.get("force", "false").lower() == "true"
     if not force and time.monotonic() - _open_meteo_last_sync < _open_meteo_sync_seconds:
@@ -453,6 +490,20 @@ def sync_open_meteo() -> Any:
     for zone in _zone_records():
         try:
             reading = fetch_current(zone)
+            reading["rainfall_source"] = "open-meteo"
+            reading["soil_source"] = "open-meteo"
+            reading["soil_observed_at"] = reading.get("observed_at")
+            open_meteo_soil = reading["soil_moisture"]
+            # NASA POWER surface soil wetness, when reachable, overrides the
+            # Open-Meteo soil value; Open-Meteo is kept as a cross-check.
+            try:
+                power = fetch_soil_moisture(zone)
+                reading["soil_moisture"] = power["soil_moisture"]
+                reading["soil_source"] = "nasa-power"
+                reading["soil_observed_at"] = power["observed_at"]
+                reading["soil_moisture_cross_check_open_meteo"] = open_meteo_soil
+            except (KeyError, TypeError, ValueError, OSError) as power_error:
+                reading["soil_source_note"] = f"NASA POWER unavailable: {power_error}"
             store.upsert_current_sensor(reading)
             store.save_sensor_update(reading)
             publish("telemetry", reading)
@@ -460,7 +511,7 @@ def sync_open_meteo() -> Any:
         except (KeyError, TypeError, ValueError, OSError) as error:
             return jsonify({"error": "Open-Meteo sync failed", "detail": str(error), "completed": len(readings)}), 502
     _open_meteo_last_sync = time.monotonic()
-    return jsonify({"status": "updated", "provider": "Open-Meteo", "readings": readings, "recorded_at": store.timestamp()})
+    return jsonify({"status": "updated", "provider": "Open-Meteo + NASA POWER", "readings": readings, "recorded_at": store.timestamp()})
 
 
 @app.get("/api/history")
@@ -492,9 +543,9 @@ def ml_compare() -> Any:
     payload = request.get_json(silent=True) or {}
     try:
         from .ml_model import compare_risk
+        # compare_risk falls back to a dependency-free logistic surrogate when
+        # scikit-learn is not in the bundle, so this always returns a real number.
         result = compare_risk(payload)
-    except ImportError:
-        return jsonify({"error": "ML comparison model is not available in this deployment"}), 503
     except (KeyError, TypeError, ValueError) as error:
         return jsonify({"error": str(error)}), 400
     return jsonify(result)
@@ -709,6 +760,28 @@ def _run_live_cycle(refresh: bool = True) -> dict[str, Any]:
     return {"ingest": ingest_summary, "alerts_dispatched": dispatched}
 
 
+def _overlay_unified_now(payload: dict[str, Any]) -> dict[str, Any]:
+    """Replace each Live Forecast zone's *current* risk score/level with the one
+    from the single risk engine (calculate_risk), so every page shows the same
+    number. The rainfall-only trigger model is kept, clearly labelled, only for
+    the forward trajectory and lead time."""
+    by_id = {z["id"]: z for z in _zone_records()}
+    for zone in payload.get("zones", []):
+        record = by_id.get(zone.get("zone_id"))
+        now = zone.get("now")
+        if not record or not now:
+            continue
+        unified = _risk_record(record)
+        now["trigger_model_score"] = now.get("risk_score")
+        now["trigger_model_level"] = now.get("risk_level")
+        now["risk_score"] = unified["risk_score"]
+        now["risk_level"] = unified["risk_level"]
+        now["score_model"] = "unified risk engine (calculate_risk)"
+        zone["confidence"] = unified["confidence"]
+    payload["forecast_model"] = "rainfall-trigger model (API + Caine ID + Mora-Vahrson) — trajectory & lead time only"
+    return payload
+
+
 @app.get("/api/live/hazard")
 def live_hazard() -> Any:
     zones = _live_zones()
@@ -717,7 +790,7 @@ def live_hazard() -> Any:
             ingest_all(live_store, zones)
         except (OSError, RuntimeError) as error:
             return jsonify({"status": "warming_up", "detail": str(error), "zones": []}), 200
-    return jsonify(all_live_hazards(live_store, zones))
+    return jsonify(_overlay_unified_now(all_live_hazards(live_store, zones)))
 
 
 @app.get("/api/live/hazard/<zone_id>")

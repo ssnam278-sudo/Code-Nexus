@@ -8,11 +8,40 @@ slope as a bounded 0–100 score with four operational levels
 motivated heuristic**, not a machine-learned classifier — every term is a named
 quantity with a citation.
 
-`backend/rainfall_model.py` is the model. `backend/risk_engine.py` is the
-transparent flat weighted-sum shown in the dashboard's **Risk score formula**
-panel (`risk = Σ wᵢ·xᵢ`); its weight table is `WEIGHTS` and every factor's
-weight, normalised input and point contribution is returned in
-`contributing_factors`.
+### The score — one formula, everywhere
+
+`backend/risk_engine.py` `calculate_risk()` is the **single** risk formula in
+the product. The Situation Room, Zone Intelligence, Alerts and Live Forecast
+pages all display the value it returns (served bundled in `/api/zones`); the
+offline browser build (`frontend/js/app.js` `CodeNexusRisk`) is a line-for-line
+port, so it produces the same number.
+
+```
+risk = 0.35·rainfall_pressure
+     + 0.25·soil_saturation
+     + 0.25·terrain_susceptibility
+     + 0.15·historical_susceptibility          Σ weights = 1.00
+```
+
+Each term is normalised to 0–100; `risk` is 0–100 with bands **35 / 55 / 75**
+= Advisory / High / Critical.
+
+| Term | Inputs → xᵢ (0–100) |
+| --- | --- |
+| `rainfall_pressure` | `100 · clamp(0.6·(mm_hr / 50) + 0.4·(accum_24h / 200), 0..1)` |
+| `soil_saturation` | soil moisture %, as-is |
+| `terrain_susceptibility` | `0.5·slope + 0.5·susceptibility` |
+| `historical_susceptibility` | `history` index, as-is |
+
+`50 mm/hr` (torrential single hour) and `200 mm/24h` (≈ IMD "extremely heavy"
+day) are the top-of-scale references. **Exposure is not in the hazard score** —
+it belongs to consequence, and is used only in the response-priority ranking
+(`priority = 0.65·risk + 0.35·exposure`).
+
+`backend/rainfall_model.py` (Antecedent Precip Index + Caine ID + Mora-Vahrson)
+is a **separate** physical model, used only for the Event Replay validation and
+the forward trajectory / lead-time on the Live Forecast page — never for the
+current-risk number.
 
 ### Confidence
 
@@ -21,23 +50,25 @@ computes it from real signals and returns an itemised `confidence_basis`:
 
 | Driver | Effect |
 | --- | --- |
-| Live Open-Meteo feed, fresh (< 90 min) | +18 |
-| Live feed, 1.5–3 h old / > 3 h old | +9 / +2 |
-| Simulated inputs (no live feed) | +0 |
-| Current rainfall, 24 h accumulation and soil moisture agree | +7 |
-| Rainfall spike not yet reflected in soil / accumulation | −11 |
-| All seven inputs present and in range | +4 |
+| Live Open-Meteo rainfall, fresh (< 90 min) | +14 |
+| Live rainfall, 1.5–3 h old / > 3 h old | +7 / +2 |
+| Simulated rainfall (no live feed) | +0 |
+| Soil moisture from NASA POWER / Open-Meteo / simulated | +6 / +4 / −6 |
+| Rainfall pressure and soil saturation agree | +7 |
+| Heavy rain not yet reflected in soil moisture | −11 |
+| All inputs present and in range | +4 |
 | Corroborating field report (added in `apply_ground_truth`) | +6…+12 |
 
 Base 72, clamped to 40–97.
 
 ## Inputs
 
-| Input | Source in prototype | Source in production |
+| Input | Source now | Source in production |
 | --- | --- | --- |
-| Hourly rainfall (now + antecedent) | Open-Meteo forecast / ERA5 archive | IMD AWS, GPM-IMERG, local tipping-bucket gauges |
-| Slope | Per-zone constant (0–100) | SRTM / Cartosat DEM, per pixel |
-| Terrain susceptibility | Per-zone constant (0–100) | GSI Landslide Susceptibility Zonation |
+| Rainfall (now + 24 h accumulation) | **LIVE** — Open-Meteo forecast API, keyless | IMD AWS, GPM-IMERG, local tipping-bucket gauges |
+| Soil moisture | **LIVE** — NASA POWER `GWETTOP` (daily, ~2–5 day lag), Open-Meteo 0–7 cm as cross-check | NASA SMAP L3/L4, in-situ probes |
+| Slope | Prepared — SRTM DEM-derived per zone (`zone_profile_cache`) | SRTM / Cartosat DEM, per pixel |
+| Terrain susceptibility | Prepared — GSI-style susceptibility baseline per zone | GSI Landslide Susceptibility Zonation |
 | Historical vulnerability | Per-zone constant (0–100) | GSI landslide inventory, NASA Global Landslide Catalog |
 
 ## Method
