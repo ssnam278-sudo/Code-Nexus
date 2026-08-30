@@ -7,7 +7,7 @@ const Dashboard = (() => {
 		actions = callbacks;
 		document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => actions.switchView(item.dataset.view)));
 		document.querySelectorAll('[data-view-target]').forEach(item => item.addEventListener('click', () => actions.switchView(item.dataset.viewTarget)));
-		$('demo-button').addEventListener('click', runDemo); $('refresh-button').addEventListener('click', () => (actions.resetDemo ? actions.resetDemo() : actions.applyScenario('Normal'))); $('zone-details-button').addEventListener('click', () => actions.switchView('intelligence')); $('report-form').addEventListener('submit', submitReport); if (!$('report-media')) { const label = document.createElement('label'); label.textContent = 'EVIDENCE PHOTO / VIDEO'; label.innerHTML += '<input id="report-media" type="file" accept="image/*,video/*">'; $('report-form').insertBefore(label, $('report-form').querySelector('.brief-action')); } if (!$('ai-comparison')) { const panel = document.createElement('section'); panel.id = 'ai-comparison'; panel.className = 'ai-comparison panel'; panel.innerHTML = '<div class="section-head"><div><p class="kicker">DECISION SUPPORT</p><h2>AI vs baseline</h2></div><span id="ai-review-badge" class="comparison-badge">SYNCING</span></div><div id="ai-comparison-body"></div>'; document.querySelector('.incident-brief')?.after(panel); }
+		$('demo-button').addEventListener('click', runDemo); $('refresh-button').addEventListener('click', () => (actions.resetDemo ? actions.resetDemo() : actions.applyScenario('Normal'))); $('zone-details-button').addEventListener('click', () => actions.switchView('intelligence')); $('report-form').addEventListener('submit', submitReport); if (!$('report-media')) { const label = document.createElement('label'); label.textContent = 'EVIDENCE PHOTO / VIDEO'; label.innerHTML += '<input id="report-media" type="file" accept="image/*,video/*">'; $('report-form').insertBefore(label, $('report-form').querySelector('.brief-action')); } if (!$('ai-comparison')) { const panel = document.createElement('section'); panel.id = 'ai-comparison'; panel.className = 'ai-comparison panel'; panel.innerHTML = '<div class="section-head"><div><p class="kicker">DECISION SUPPORT</p><h2>ML Risk Check</h2></div><span id="ai-review-badge" class="comparison-badge">SYNCING</span></div><div id="ai-comparison-body"></div><p class="ml-disclaimer"><b>Prototype model — not validated.</b> Random Forest (logistic surrogate where scikit-learn is not bundled), trained on <b>synthetic data</b> (<code>historical_training.json</code>), <b>not</b> real disaster records. Shown only as a cross-check on the physics-based score.</p>'; document.querySelector('.incident-brief')?.after(panel); }
 	}
 	function runDemo() { const button = $('demo-button'); button.disabled = true; button.innerHTML = '<span>●</span> Monitoring escalation'; actions.applyScenario('Normal'); setTimeout(() => actions.applyScenario('Heavy Rain'), 1500); setTimeout(() => actions.applyScenario('Extreme Rain'), 3300); setTimeout(() => { button.disabled = false; button.innerHTML = '<span>▶</span> Run escalation demo'; }, 5100); }
 	const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
@@ -376,14 +376,22 @@ const Dashboard = (() => {
 		const comparison = state.mlComparison;
 		if (!comparison) {
 			const z = current(state) || {};
-			if ($('ai-review-badge')) { $('ai-review-badge').textContent = 'BASELINE'; $('ai-review-badge').className = 'comparison-badge agree'; }
-			body.innerHTML = `<div class="comparison-scores"><span>BASELINE ENGINE <b>${Math.round(num(z.score))} · ${safeLevel(z)}</b></span><span>MODEL CONFIDENCE <b>${Math.round(num(z.confidence, 0))}%</b></span></div><p>Explainable rainfall-trigger engine is active. The learned comparison model runs when the API backend is connected.</p>`;
+			if ($('ai-review-badge')) { $('ai-review-badge').textContent = 'BASELINE ONLY'; $('ai-review-badge').className = 'comparison-badge agree'; }
+			body.innerHTML = `<div class="comparison-scores"><span>PHYSICS-BASED SCORE <b>${Math.round(num(z.score))} · ${safeLevel(z)}</b></span><span>CONFIDENCE <b>${Math.round(num(z.confidence, 0))}%</b></span></div><p>The ML cross-check runs when the API is reachable.</p>`;
 			return;
 		}
 		const model = comparison.model; const baseline = comparison.baseline;
-		$('ai-review-badge').textContent = comparison.comparison.agrees ? 'AGREEMENT' : 'REVIEW REQUIRED';
-		$('ai-review-badge').className = `comparison-badge ${comparison.comparison.agrees ? 'agree' : 'review'}`;
-		body.innerHTML = `<div class="comparison-scores"><span>BASELINE <b>${baseline.risk_score} · ${baseline.risk_level}</b></span><span>AI MODEL <b>${model.prediction} · ${model.confidence}%</b></span></div><p>${model.explanation}</p><div class="ai-drivers">${model.top_drivers.map(driver => `<span>${driver.name}<b>${driver.importance}%</b></span>`).join('')}</div>`;
+		const agrees = comparison.comparison.agrees;
+		$('ai-review-badge').textContent = agrees ? 'ML AGREES' : 'ML DISAGREES — REVIEW';
+		$('ai-review-badge').className = `comparison-badge ${agrees ? 'agree' : 'review'}`;
+		body.innerHTML =
+			`<div class="comparison-scores">`
+			+ `<span>PHYSICS-BASED <b>${baseline.risk_score} · ${baseline.risk_level}</b></span>`
+			+ `<span>ML PREDICTION <b>${model.prediction} · ${model.confidence}% conf</b></span>`
+			+ `</div>`
+			+ `<p><b>${model.name || 'ML model'}:</b> ${model.explanation}</p>`
+			+ `<p class="ai-drivers-head">Top ML factors</p>`
+			+ `<div class="ai-drivers">${(model.top_drivers || []).slice(0, 3).map(driver => `<span>${driver.name}<b>${driver.importance}%</b></span>`).join('')}</div>`;
 	}
 	// the SAME four factors and weights the score is built from
 	function factors(zone) {
@@ -438,7 +446,11 @@ const Dashboard = (() => {
 		const headline = $('exposed-headline');
 		if (headline) {
 			const all = (AppState.infrastructure || []).reduce((sum, asset) => sum + num(asset.population_served), 0);
-			headline.textContent = all ? roundK(all) : '≈—';
+			// never a bare dash — fall back to a labelled index estimate across all zones
+			const idxEstimate = (AppState.zones || []).reduce((s, z) => s + num(z.exposure) * 150, 0);
+			headline.textContent = all ? roundK(all) : roundK(idxEstimate);
+			const em = headline.nextElementSibling;
+			if (em) em.textContent = all ? 'Modelled estimate · asset registry' : 'Modelled estimate · exposure index';
 		}
 	}
 	function renderZones(state) { const list = document.getElementById('zone-list'); if (!list) return; list.innerHTML = (state.zones || []).map(zone => `<div class="zone-row ${zone.id === state.selectedZoneId ? 'selected' : ''}" data-zone="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><strong>${Math.round(num(zone.score))}</strong></div>`).join(''); document.querySelectorAll('[data-zone]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zone))); }

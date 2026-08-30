@@ -363,8 +363,10 @@ async function selectZone(id) {
 	AppState.selectedZoneId = id;
 	if (AppState.backendConnected) {
 		try { AppState.exposure = await ApiClient.exposure(id); } catch (error) { /* keep prior exposure */ }
+		try { AppState.mlComparison = await ApiClient.mlCompare(AppState.zones.find(z => z.id === id) || {}); } catch (error) { /* keep last ML result */ }
 	}
 	renderState();
+	if (typeof window.refreshMlCheck === 'function') window.refreshMlCheck();
 }
 
 async function applyScenario(scenario) {
