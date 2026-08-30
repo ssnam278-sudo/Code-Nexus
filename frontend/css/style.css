@@ -134,3 +134,5 @@
 .report-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .report-file { flex:0 0 auto; align-self:center; padding:5px 8px; border:1px solid #d5e1e1; border-radius:5px; background:#fbfdfd; color:#2c5b62; font-size:10px; text-decoration:none; }
 .report-file:hover { background:#eef7f6; }
+.seed-tag { margin-left:6px; padding:1px 5px; border-radius:3px; background:#eef1f1; color:#8a9a9d; font:600 8px 'Barlow Condensed'; letter-spacing:.7px; vertical-align:1px; }
+.report-row.is-seed { background:#fcfdfd; }

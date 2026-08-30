@@ -1,0 +1,26 @@
+[
+  {
+    "zone_id": "tawang",
+    "location": "Tawang Corridor",
+    "observation": "Minor soil slippage observed near km marker 12, road shoulder showing cracks after continuous rainfall",
+    "severity": "Advisory",
+    "status": "Verified",
+    "hours_ago": 18
+  },
+  {
+    "zone_id": "siang",
+    "location": "East Siang Valley",
+    "observation": "Local resident reported small debris on approach road, cleared by afternoon",
+    "severity": "Advisory",
+    "status": "Verified",
+    "hours_ago": 48
+  },
+  {
+    "zone_id": "roing",
+    "location": "Roing Foothills",
+    "observation": "Field team confirmed rising water level near stream crossing, no immediate road blockage",
+    "severity": "High",
+    "status": "Under review",
+    "hours_ago": 5
+  }
+]

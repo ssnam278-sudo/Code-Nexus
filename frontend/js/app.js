@@ -61,12 +61,21 @@ const BASELINE_ZONES = [
 	{ id: 'ukhrul', name: 'Ukhrul Ridge', district: 'Ukhrul, Manipur', coordinates: [25.0968, 94.3614], slope: 38.3, susceptibility: 44.1, history: 39.0, exposure: 44, rainfall: 13.1, moisture: 43, temperature: 22.8, accumulated: 74, population: 11000 }
 ];
 
+/* Demo baseline for the Verification log so it is never blank. The backend
+ * seeds the same three rows into its DB (backend/data/seed_reports.json); these
+ * are the offline / backend-unreachable fallback. Marked seed:true — real
+ * submissions always sort above them and are what feed the risk engine. */
 const SeedReports = (() => {
-	let reports = [
-		{ location: 'Tawang Corridor', observation: 'Fresh tension cracks observed near km marker 14.2.', severity: 'High', time: '14:18 IST', status: 'Under review' },
-		{ location: 'East Siang Valley', observation: 'Drainage channel clear after morning inspection.', severity: 'Advisory', time: '13:42 IST', status: 'Verified' }
+	const stamp = hoursAgo => {
+		const dt = new Date(Date.now() - hoursAgo * 3600 * 1000);
+		return dt.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) + ' IST';
+	};
+	const reports = [
+		{ zone_id: 'roing', location: 'Roing Foothills', observation: 'Field team confirmed rising water level near stream crossing, no immediate road blockage', severity: 'High', status: 'Under review', time: stamp(5), seed: true },
+		{ zone_id: 'tawang', location: 'Tawang Corridor', observation: 'Minor soil slippage observed near km marker 12, road shoulder showing cracks after continuous rainfall', severity: 'Advisory', status: 'Verified', time: stamp(18), seed: true },
+		{ zone_id: 'siang', location: 'East Siang Valley', observation: 'Local resident reported small debris on approach road, cleared by afternoon', severity: 'Advisory', status: 'Verified', time: stamp(48), seed: true }
 	];
-	return { list: () => structuredClone(reports), add: r => { reports.unshift(r); return structuredClone(r); } };
+	return { list: () => structuredClone(reports), add: () => {} };
 })();
 
 /* Small localStorage layer. On Vercel the serverless SQLite in /tmp is wiped
@@ -82,18 +91,17 @@ const Persist = window.Persist = {
 	clear(key) { try { localStorage.removeItem('codenexus.' + key); } catch (e) {} }
 };
 
-// Merge locally-stored field reports into whatever the backend returned, newest
-// first, deduped by (timestamp|observation).
+// Merge: operator's local submissions first, then whatever the backend has,
+// then the demo seed rows so the log is never blank. Deduped by observation
+// text (backend-seeded rows share text with the client seeds -> not doubled).
 function mergeLocalReports(backendReports) {
 	const seen = new Set();
 	const out = [];
-	const push = r => {
-		const key = (r.timestamp || r.time || '') + '|' + (r.observation || '');
-		if (seen.has(key)) return;
-		seen.add(key); out.push(r);
-	};
+	const key = r => String(r.observation || '').trim().toLowerCase().slice(0, 120);
+	const push = r => { const k = key(r); if (k && seen.has(k)) return; if (k) seen.add(k); out.push(r); };
 	(AppState._localReports || []).forEach(push);
 	(backendReports || []).forEach(push);
+	SeedReports.list().forEach(push);
 	return out;
 }
 

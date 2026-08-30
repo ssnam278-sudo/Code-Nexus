@@ -860,7 +860,8 @@ def clear_reports() -> Any:
     if configured_key and request.headers.get("X-Ingest-Key") != configured_key:
         return jsonify({"error": "invalid ingestion key"}), 401
     removed = store.clear_field_reports()
-    return jsonify({"cleared": removed})
+    reseeded = store.seed_field_reports(force=True)   # keep the demo baseline visible
+    return jsonify({"cleared": removed, "reseeded": reseeded})
 
 
 @app.post("/api/alerts/dispatch-test")

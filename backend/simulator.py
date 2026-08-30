@@ -50,6 +50,7 @@ class DataStore:
 		self.data_dir = Path(data_dir)
 		self.database_path.parent.mkdir(parents=True, exist_ok=True)
 		self.initialize_database()
+		self.seed_field_reports()
 
 	def connection(self) -> sqlite3.Connection:
 		connection = sqlite3.connect(self.database_path)
@@ -142,6 +143,7 @@ class DataStore:
 				"media_type": "TEXT",
 				"media_name": "TEXT",
 				"media_data": "TEXT",   # base64 data URI of the evidence photo/video
+				"is_seed": "INTEGER DEFAULT 0",   # demo baseline rows — never feed ground truth
 			}.items():
 				if column not in columns:
 					connection.execute(f"ALTER TABLE field_reports ADD COLUMN {column} {definition}")
@@ -245,13 +247,47 @@ class DataStore:
 		return [dict(row) for row in rows]
 
 	def latest_field_report(self, zone_id: str) -> dict[str, Any] | None:
-		"""Most recent field report for a zone (any status), or None."""
+		"""Most recent *operator-submitted* field report for a zone, or None.
+		Demo seed rows (is_seed = 1) are excluded so they never move the score."""
 		with self.connection() as connection:
 			row = connection.execute(
-				"SELECT * FROM field_reports WHERE zone_id = ? ORDER BY id DESC LIMIT 1",
+				"SELECT * FROM field_reports WHERE zone_id = ? AND COALESCE(is_seed, 0) = 0 ORDER BY id DESC LIMIT 1",
 				(zone_id,),
 			).fetchone()
 		return dict(row) if row else None
+
+	def seed_field_reports(self, force: bool = False) -> int:
+		"""Insert the demo baseline field reports (backend/data/seed_reports.json)
+		when the table is empty, so the Verification log is never blank. Returns
+		the number of rows added."""
+		path = self.data_dir / "seed_reports.json"
+		if not path.exists():
+			return 0
+		try:
+			seeds = json.loads(path.read_text(encoding="utf-8"))
+		except (OSError, ValueError):
+			return 0
+		if not isinstance(seeds, list):
+			return 0
+		with self.connection() as connection:
+			if not force:
+				existing = connection.execute("SELECT COUNT(*) FROM field_reports").fetchone()[0]
+				if existing:
+					return 0
+			now = datetime.now(timezone.utc)
+			added = 0
+			for seed in seeds:
+				when = (now - timedelta(hours=float(seed.get("hours_ago", 24)))).isoformat()
+				connection.execute(
+					"INSERT INTO field_reports (zone_id, location, observation, severity, timestamp, status, created_at, is_seed) "
+					"VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+					(
+						seed["zone_id"], seed["location"], seed["observation"], seed["severity"],
+						when, seed.get("status", "Submitted"), self.timestamp(),
+					),
+				)
+				added += 1
+			return added
 
 
 def simulate_zone(

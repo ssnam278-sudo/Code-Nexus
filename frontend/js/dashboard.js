@@ -518,7 +518,11 @@ const Dashboard = (() => {
 	}
 	function renderReports(state) {
 		syncReportLocations(state);
-		$('report-list').innerHTML = (state.reports || []).map(report => `<div class="report-row">${evidenceHtml(report)}<div><strong>${report.location || '—'}</strong><small>${report.observation || ''}</small><small>${report.time || '—'} · ${report.status || 'Submitted'}</small></div><select class="report-status" data-report-id="${report.id ?? ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${String(report.severity || 'Advisory').toUpperCase()}</b></div>`).join('');
+		$('report-list').innerHTML = (state.reports || []).map(report => {
+			const isSeed = report.seed === true || report.is_seed === 1 || report.is_seed === true;
+			const tag = isSeed ? ' <span class="seed-tag">DEMO</span>' : '';
+			return `<div class="report-row${isSeed ? ' is-seed' : ''}">${evidenceHtml(report)}<div><strong>${report.location || '—'}${tag}</strong><small>${report.observation || ''}</small><small>${report.time || '—'} · ${report.status || 'Submitted'}</small></div><select class="report-status" data-report-id="${report.id ?? ''}" aria-label="Update report status"><option ${report.status === 'Submitted' ? 'selected' : ''}>Submitted</option><option ${report.status === 'Under review' ? 'selected' : ''}>Under review</option><option ${report.status === 'Verified' ? 'selected' : ''}>Verified</option><option ${report.status === 'Rejected' ? 'selected' : ''}>Rejected</option></select><b>${String(report.severity || 'Advisory').toUpperCase()}</b></div>`;
+		}).join('');
 		document.querySelectorAll('.report-status[data-report-id]').forEach(select => select.addEventListener('change', () => actions.updateReport(select.dataset.reportId, select.value)));
 	}
 	function readFileAsDataURL(file) {
