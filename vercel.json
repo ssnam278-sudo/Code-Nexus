@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "_comment": "Vercel Hobby caps cron at ONCE PER DAY, so this must stay a daily schedule or the deploy fails. For 15-min ticks: (a) upgrade to Pro and use '*/15 * * * *', (b) point a free external pinger (cron-job.org) at https://<deployment>/api/tick every 15 min, or (c) deploy the backend on Render (render.yaml) where the in-process scheduler runs every 15 min. The dashboard also pulls live Open-Meteo directly in the browser, so it shows live data even without the cron.",
   "crons": [
     { "path": "/api/tick", "schedule": "0 6 * * *" }
   ]

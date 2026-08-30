@@ -9,6 +9,26 @@ situation room) is unchanged. Only deployment glue was added:
 | `pyproject.toml` | `[tool.vercel] entrypoint = "backend.app:app"` – Vercel serves the Flask WSGI app directly |
 | `backend/__init__.py` | Make `backend` an explicit package for serverless bundlers |
 | `CODENEXUS_DB` env var | Point SQLite at a writable path; the app auto‑uses `/tmp` when `VERCEL` is set |
+| `vercel.json` | A daily cron on `GET /api/tick` (rainfall pull + hazard + dispatch) |
+
+### Keeping live data flowing
+
+`vercel.json` schedules `GET /api/tick` **once a day** — that is the maximum
+cron frequency on Vercel's **Hobby** plan (a `*/15` schedule makes the build
+fail with *"cron limited to once per day"*, and any extra key like `_comment`
+in `vercel.json` fails with *"should NOT have additional property"*).
+
+For real 15‑minute ticks, pick one:
+
+1. **Vercel Pro** – change the schedule to `"*/15 * * * *"`.
+2. **External pinger (free)** – point <https://cron-job.org> (or GitHub Actions
+   `schedule`) at `https://<deployment>/api/tick` every 15 min.
+3. **Render** – deploy the backend from `render.yaml`; the in‑process scheduler
+   already runs every 15 min (`CODENEXUS_LIVE_INGEST=1`), storage is a real
+   disk, and NASA POWER soil moisture works.
+
+The browser also fetches Open‑Meteo directly, so the dashboard shows live
+rainfall/soil/score even if the cron never runs.
 
 The dashboard auto‑detects its API: when served from the same origin as the API
 (Render / Vercel) it just works, with no `frontend/js/config.js` change needed.
