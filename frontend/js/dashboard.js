@@ -433,24 +433,29 @@ const Dashboard = (() => {
 	function renderExposure(zone) {
 		const exposure = num(zone && zone.exposure);
 		const assets = (AppState.infrastructure || []).filter(asset => asset.zone_id === (zone && zone.id));
-		const pop = assets.reduce((sum, asset) => sum + num(asset.population_served), 0);
+		const assetPop = assets.reduce((sum, asset) => sum + num(asset.population_served), 0);
+		// per-zone census-based estimate (zones.json), then asset registry, then index
+		const zonePop = num(zone && zone.population);
 		const exposedEl = $('exposed-population');
 		if (exposedEl) {
-			exposedEl.textContent = assets.length ? roundK(pop) : roundK(exposure * 150);
+			const val = zonePop || assetPop || exposure * 150;
+			exposedEl.textContent = roundK(val);
 			const label = exposedEl.nextElementSibling;
-			if (label) label.textContent = assets.length ? 'People · from asset registry' : 'People · index-based estimate';
+			if (label) label.textContent = zonePop ? 'People · census estimate (Phase 2: WorldPop)'
+				: assets.length ? 'People · from asset registry' : 'People · index-based estimate';
 		}
 		$('roads-at-risk').textContent = String(assets.filter(asset => asset.type === 'road').length || Math.max(1, Math.round(exposure / 28))).padStart(2,'0');
 		$('villages-count').textContent = String(assets.filter(asset => asset.type === 'village').length || Math.max(2, Math.round(exposure / 12))).padStart(2,'0');
 		$('infrastructure-count').textContent = String(assets.filter(asset => asset.criticality === 'Critical' || asset.type === 'bridge').length || Math.max(1, Math.round(exposure / 22))).padStart(2,'0');
 		const headline = $('exposed-headline');
 		if (headline) {
-			const all = (AppState.infrastructure || []).reduce((sum, asset) => sum + num(asset.population_served), 0);
-			// never a bare dash — fall back to a labelled index estimate across all zones
-			const idxEstimate = (AppState.zones || []).reduce((s, z) => s + num(z.exposure) * 150, 0);
-			headline.textContent = all ? roundK(all) : roundK(idxEstimate);
+			const zoneSum = (AppState.zones || []).reduce((s, z) => s + num(z.population), 0);
+			const assetSum = (AppState.infrastructure || []).reduce((sum, asset) => sum + num(asset.population_served), 0);
+			const idxSum = (AppState.zones || []).reduce((s, z) => s + num(z.exposure) * 150, 0);
+			headline.textContent = roundK(zoneSum || assetSum || idxSum);
 			const em = headline.nextElementSibling;
-			if (em) em.textContent = all ? 'Modelled estimate · asset registry' : 'Modelled estimate · exposure index';
+			if (em) em.textContent = zoneSum ? 'Census estimate · Phase 2: WorldPop / OSM'
+				: assetSum ? 'Modelled · asset registry' : 'Modelled · exposure index';
 		}
 	}
 	function renderZones(state) { const list = document.getElementById('zone-list'); if (!list) return; list.innerHTML = (state.zones || []).map(zone => `<div class="zone-row ${zone.id === state.selectedZoneId ? 'selected' : ''}" data-zone="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><strong>${Math.round(num(zone.score))}</strong></div>`).join(''); document.querySelectorAll('[data-zone]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zone))); }

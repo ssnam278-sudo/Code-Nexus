@@ -119,7 +119,8 @@ swap in for operational use. All "live now" sources are **free and keyless**.
 
 | | |
 | --- | --- |
-| **Used in** | `backend/data/infrastructure.json` (prototype, hand-entered) |
+| **Used in** | `backend/data/zones.json` `population` field — a per-corridor **census-based estimate** (2011 Census town + adjacent villages within the hazard zone), shown as "Estimated · Phase 2: WorldPop". `backend/data/infrastructure.json` for roads / villages / critical assets (hand-entered). |
+| **Phase 2** | Replace the static per-zone number with a live WorldPop / OSM settlement query per zone polygon. |
 | **Authoritative replacements** | |
 | WorldPop (100 m population) | https://www.worldpop.org/ |
 | Meta / CIESIN High-Resolution Population Density | https://data.humdata.org/dataset/highresolutionpopulationdensitymaps |

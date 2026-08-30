@@ -51,14 +51,14 @@ function levelFor(score) { return window.CodeNexusRisk.level(score); }
  * No score is stored — it is always computed by CodeNexusRisk, so the offline
  * build produces the same number as the API. */
 const BASELINE_ZONES = [
-	{ id: 'tawang', name: 'Tawang Corridor', district: 'Tawang, Arunachal Pradesh', coordinates: [27.5861, 91.8594], slope: 61.9, susceptibility: 81.8, history: 55.0, exposure: 86, rainfall: 42.6, moisture: 76, temperature: 19.4, accumulated: 184 },
-	{ id: 'siang', name: 'East Siang Valley', district: 'Pasighat, Arunachal Pradesh', coordinates: [28.0667, 95.3267], slope: 27.5, susceptibility: 36.1, history: 27.0, exposure: 72, rainfall: 29.8, moisture: 64, temperature: 22.1, accumulated: 138 },
-	{ id: 'chura', name: 'Churachandpur Ridge', district: 'Churachandpur, Manipur', coordinates: [24.3333, 93.6833], slope: 32.5, susceptibility: 41.9, history: 36.1, exposure: 63, rainfall: 18.4, moisture: 51, temperature: 24.7, accumulated: 96 },
-	{ id: 'garo', name: 'South Garo Hills', district: 'Baghmara, Meghalaya', coordinates: [25.1980, 90.6300], slope: 20.8, susceptibility: 21.8, history: 17.5, exposure: 51, rainfall: 11.2, moisture: 39, temperature: 25.8, accumulated: 67 },
-	{ id: 'bomdila', name: 'Bomdila Pass', district: 'West Kameng, Arunachal Pradesh', coordinates: [27.2648, 92.4246], slope: 47.2, susceptibility: 61.0, history: 15.5, exposure: 32, rainfall: 7.4, moisture: 29, temperature: 14.8, accumulated: 42 },
-	{ id: 'ziro', name: 'Ziro Valley', district: 'Lower Subansiri, Arunachal Pradesh', coordinates: [27.5444, 93.8197], slope: 29.1, susceptibility: 34.3, history: 27.9, exposure: 58, rainfall: 14.6, moisture: 46, temperature: 20.6, accumulated: 81 },
-	{ id: 'roing', name: 'Roing Foothills', district: 'Lower Dibang Valley, Arunachal Pradesh', coordinates: [28.1397, 95.8400], slope: 41.9, susceptibility: 50.6, history: 26.0, exposure: 61, rainfall: 22.7, moisture: 58, temperature: 21.2, accumulated: 119 },
-	{ id: 'ukhrul', name: 'Ukhrul Ridge', district: 'Ukhrul, Manipur', coordinates: [25.0968, 94.3614], slope: 38.3, susceptibility: 44.1, history: 39.0, exposure: 44, rainfall: 13.1, moisture: 43, temperature: 22.8, accumulated: 74 }
+	{ id: 'tawang', name: 'Tawang Corridor', district: 'Tawang, Arunachal Pradesh', coordinates: [27.5861, 91.8594], slope: 61.9, susceptibility: 81.8, history: 55.0, exposure: 86, rainfall: 42.6, moisture: 76, temperature: 19.4, accumulated: 184, population: 14000 },
+	{ id: 'siang', name: 'East Siang Valley', district: 'Pasighat, Arunachal Pradesh', coordinates: [28.0667, 95.3267], slope: 27.5, susceptibility: 36.1, history: 27.0, exposure: 72, rainfall: 29.8, moisture: 64, temperature: 22.1, accumulated: 138, population: 24000 },
+	{ id: 'chura', name: 'Churachandpur Ridge', district: 'Churachandpur, Manipur', coordinates: [24.3333, 93.6833], slope: 32.5, susceptibility: 41.9, history: 36.1, exposure: 63, rainfall: 18.4, moisture: 51, temperature: 24.7, accumulated: 96, population: 19000 },
+	{ id: 'garo', name: 'South Garo Hills', district: 'Baghmara, Meghalaya', coordinates: [25.1980, 90.6300], slope: 20.8, susceptibility: 21.8, history: 17.5, exposure: 51, rainfall: 11.2, moisture: 39, temperature: 25.8, accumulated: 67, population: 9000 },
+	{ id: 'bomdila', name: 'Bomdila Pass', district: 'West Kameng, Arunachal Pradesh', coordinates: [27.2648, 92.4246], slope: 47.2, susceptibility: 61.0, history: 15.5, exposure: 32, rainfall: 7.4, moisture: 29, temperature: 14.8, accumulated: 42, population: 7000 },
+	{ id: 'ziro', name: 'Ziro Valley', district: 'Lower Subansiri, Arunachal Pradesh', coordinates: [27.5444, 93.8197], slope: 29.1, susceptibility: 34.3, history: 27.9, exposure: 58, rainfall: 14.6, moisture: 46, temperature: 20.6, accumulated: 81, population: 14000 },
+	{ id: 'roing', name: 'Roing Foothills', district: 'Lower Dibang Valley, Arunachal Pradesh', coordinates: [28.1397, 95.8400], slope: 41.9, susceptibility: 50.6, history: 26.0, exposure: 61, rainfall: 22.7, moisture: 58, temperature: 21.2, accumulated: 119, population: 12000 },
+	{ id: 'ukhrul', name: 'Ukhrul Ridge', district: 'Ukhrul, Manipur', coordinates: [25.0968, 94.3614], slope: 38.3, susceptibility: 44.1, history: 39.0, exposure: 44, rainfall: 13.1, moisture: 43, temperature: 22.8, accumulated: 74, population: 11000 }
 ];
 
 const SeedReports = (() => {
