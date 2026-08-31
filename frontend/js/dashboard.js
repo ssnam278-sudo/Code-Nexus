@@ -459,9 +459,33 @@ const Dashboard = (() => {
 		}
 	}
 	function renderZones(state) { const list = document.getElementById('zone-list'); if (!list) return; list.innerHTML = (state.zones || []).map(zone => `<div class="zone-row ${zone.id === state.selectedZoneId ? 'selected' : ''}" data-zone="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><strong>${Math.round(num(zone.score))}</strong></div>`).join(''); document.querySelectorAll('[data-zone]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zone))); }
+	// ONE definition of "an active alert", used by the nav badge, the Situation
+	// Room event stream AND the Alert register — always derived from state.zones
+	// (the single source of truth for scores), enriched with the server's alert
+	// detail where available. Guarantees the badge count == register row count.
+	const ALERT_LEVELS = ['Advisory', 'High', 'Critical'];
+	function activeAlerts(state) {
+		const byZone = {};
+		(state.alerts || []).forEach(a => { if (a && a.zone_id) byZone[a.zone_id] = a; });
+		return (state.zones || [])
+			.filter(zone => ALERT_LEVELS.includes(safeLevel(zone)))
+			.sort((a, b) => num(b.score) - num(a.score))
+			.map(zone => {
+				const level = safeLevel(zone);
+				const server = byZone[zone.id];
+				return {
+					zone_id: zone.id,
+					level,
+					title: (server && server.title) || `${level} risk detected`,
+					reason: (server && server.reason) || zone.name,
+					recommended_action: server && server.recommended_action,
+					risk_score: Math.round(num(zone.score))
+				};
+			});
+	}
 	function renderAlerts(state) {
 		state.acks = state.acks || {};
-		const alerts = (state.alerts && state.alerts.length) ? state.alerts : (state.zones || []).filter(zone => safeLevel(zone) === 'High' || safeLevel(zone) === 'Critical').map(zone => ({ zone_id:zone.id, level:safeLevel(zone), title:`${safeLevel(zone)} risk detected`, reason:zone.name, risk_score:Math.round(num(zone.score)) }));
+		const alerts = activeAlerts(state);
 		$('alert-count').textContent = String(alerts.length).padStart(2, '0');
 		$('alert-list').innerHTML = (alerts.length ? alerts : [{ title:'No active escalation', level:'Monitoring', risk_score:0 }]).slice(0, 3).map(alert => {
 			const key = `${alert.zone_id || alert.title}|${alert.level}`;
@@ -483,11 +507,11 @@ const Dashboard = (() => {
 	function renderPriority(state) { const priority = [...(state.zones || [])].sort((a,b) => (num(b.score) * .65 + num(b.exposure) * .35) - (num(a.score) * .65 + num(a.exposure) * .35)); $('priority-list').innerHTML = priority.slice(0,3).map((zone,index) => { const lvl = safeLevel(zone); return `<div class="priority-row"><strong>0${index + 1}</strong><div><b>${zone.name || '—'}</b><small>${lvl.toUpperCase()} · ${Math.round(num(zone.exposure))}% exposure</small></div><em>${lvl === 'Critical' || lvl === 'High' ? 'VERIFY NOW' : 'MONITOR'}</em></div>`; }).join(''); }
 	function renderIntelligence(state) { $('intelligence-zone-list').innerHTML = (state.zones || []).map(zone => `<div class="intelligence-zone" data-zone-intel="${zone.id}"><i class="dot ${levelClass(safeLevel(zone))}"></i><span>${zone.name || '—'}</span><b>${Math.round(num(zone.score))}</b></div>`).join(''); document.querySelectorAll('[data-zone-intel]').forEach(item => item.addEventListener('click', () => actions.selectZone(item.dataset.zoneIntel))); const zone = current(state) || {}; $('intelligence-detail').innerHTML = `<p class="kicker">SELECTED ZONE / ${String(zone.district || '—').toUpperCase()}</p><h2>${zone.name || '—'}</h2><p>${explanation(zone)}</p><div class="factor-list">${factors(zone).map(item => `<div class="factor"><span>${item.label}</span><strong>${item.value}<b>${item.weight}</b></strong></div>`).join('')}</div>`; }
 	function renderAlertsPage(state) {
-		// the register lists only zones that are actually at an alert level
-		// (Advisory+), so its row count matches the nav "Alerts NN" badge.
-		const ALERT_LEVELS = ['Advisory', 'High', 'Critical'];
+		// Same activeAlerts() set as the nav badge and the event stream, so the
+		// register row count can never disagree with "Alerts NN".
 		const all = (state.zones || []);
-		const alerting = all.filter(z => ALERT_LEVELS.includes(safeLevel(z))).sort((a, b) => num(b.score) - num(a.score));
+		const alertIds = new Set(activeAlerts(state).map(a => a.zone_id));
+		const alerting = all.filter(z => alertIds.has(z.id)).sort((a, b) => num(b.score) - num(a.score));
 		const belowCount = all.length - alerting.length;
 		$('all-alerts').innerHTML = (alerting.length
 			? alerting.map(zone => `<div class="all-alert-row"><i class="dot ${levelClass(safeLevel(zone))}"></i><div><strong>${zone.name || '—'}</strong><small>Risk ${Math.round(num(zone.score))} · ${num(zone.rainfall).toFixed(1)} mm/hr · ${Math.round(num(zone.moisture))}% soil moisture</small></div><b>${safeLevel(zone).toUpperCase()}</b></div>`).join('')

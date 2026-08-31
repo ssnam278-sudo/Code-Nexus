@@ -369,6 +369,10 @@ async function bootstrap() {
 async function selectZone(id) {
 	AppState.previousZones = AppState.zones.map(zone => ({ ...zone }));
 	AppState.selectedZoneId = id;
+	// Paint the new zone immediately — everything needed is already in
+	// AppState.zones. Waiting on the network first made the detail pane lag a
+	// second behind the click on a real connection.
+	renderState();
 	if (AppState.backendConnected) {
 		try { AppState.exposure = await ApiClient.exposure(id); } catch (error) { /* keep prior exposure */ }
 		try { AppState.mlComparison = await ApiClient.mlCompare(AppState.zones.find(z => z.id === id) || {}); } catch (error) { /* keep last ML result */ }
