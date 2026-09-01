@@ -151,15 +151,14 @@ swap in for operational use. All "live now" sources are **free and keyless**.
 
 ---
 
-## 11. Real alert dispatch — Telegram
+## 11. Real alert dispatch — Telegram + phone SMS
 
 | | |
 | --- | --- |
-| **Used in** | `backend/alert_dispatch.py` (`send_telegram_message`), fired from `backend/app.py` `_run_live_cycle` / `_dispatch_on_escalation` |
-| **Provider** | Telegram Bot API |
-| **Endpoint** | `https://api.telegram.org/bot<token>/sendMessage` |
-| **Secrets** | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` — environment variables only, never in the repo. Setup: `TELEGRAM_SETUP.md` |
-| **Licence / cost** | Free, no card. Bot created via `@BotFather` |
+| **Used in** | `backend/alert_dispatch.py` (`send_telegram_message`, `send_sms`), fired from `backend/app.py` `_run_live_cycle` / `_dispatch_on_escalation` and `POST /api/alerts/dispatch-test` |
+| **Telegram** | Telegram Bot API — `https://api.telegram.org/bot<token>/sendMessage`. Secrets `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Free, no card. |
+| **SMS** | `SMS_TO` (+ `SMS_PROVIDER`): **Textbelt** (`https://textbelt.com/text`, shared key = 1 SMS/day free, no signup; `TEXTBELT_KEY` for more), **Twilio**, or **Fast2SMS** (India). |
+| **Secrets** | env vars only, never in the repo. Setup: `ALERTS_SETUP.md` |
 | **Trigger** | first upward crossing of a zone into High/Critical (de-duped via the `live_alert_state` table); also `POST /api/alerts/dispatch-test` |
 | **Alt.** | `ALERT_WEBHOOK_URL` — generic JSON webhook (Slack / Discord / any endpoint) |
 

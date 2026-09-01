@@ -17,7 +17,10 @@ from .alerts import ALERT_STATES, build_alert, priority_queue
 from .alert_dispatch import (
     alert_messages,
     dispatch as dispatch_alert,
+    send_sms,
     send_telegram_message,
+    sms_configured,
+    sms_text,
     telegram_configured,
     webhook_configured,
 )
@@ -460,6 +463,8 @@ def health() -> Any:
             },
             "alert_dispatch": {
                 "telegram_configured": telegram_configured(),
+                "sms_configured": sms_configured(),
+                "sms_provider": os.getenv("SMS_PROVIDER", "textbelt").strip().lower() if sms_configured() else None,
                 "webhook_configured": webhook_configured(),
             },
         }
@@ -889,18 +894,26 @@ def dispatch_test() -> Any:
     now = {"risk_score": risk["risk_score"], "risk_level": risk["risk_level"]}
     _, html = alert_messages(zone, risk["risk_level"], now, test=True)
 
-    delivered = send_telegram_message(html)
-    if delivered is None:
+    tg = send_telegram_message(html)
+    sms = send_sms(sms_text(zone, risk["risk_level"], now, test=True))
+
+    def status(v: bool | None) -> str:
+        return "skipped" if v is None else ("sent" if v else "failed")
+
+    if tg is None and sms is None:
         return jsonify({
             "telegram": "skipped",
-            "reason": "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set",
+            "sms": "skipped",
+            "reason": "no channel configured — set TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID and/or SMS_TO",
         })
+    ok = (tg is not False) and (sms is not False)
     return jsonify({
-        "telegram": "sent" if delivered else "failed",
+        "telegram": status(tg),
+        "sms": status(sms),
         "zone": zone["id"],
         "risk_score": risk["risk_score"],
         "risk_level": risk["risk_level"],
-    }), (200 if delivered else 502)
+    }), (200 if ok else 502)
 
 
 @app.get("/api/sensor-updates")

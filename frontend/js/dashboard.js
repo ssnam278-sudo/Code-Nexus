@@ -322,9 +322,18 @@ const Dashboard = (() => {
 			: flags.soil === 'partial' ? 'Mixed: some zones live, some simulated'
 			: 'Simulated soil saturation (no live feed connected)';
 		const disp = state && state.health && state.health.alert_dispatch;
-		if ($('src-dispatch-status')) $('src-dispatch-status').textContent = disp
-			? (disp.telegram_configured ? 'LIVE · Telegram' : 'NOT CONFIGURED')
-			: 'CONFIGURABLE';
+		if ($('src-dispatch-status')) {
+			const chans = [];
+			if (disp && disp.telegram_configured) chans.push('Telegram');
+			if (disp && disp.sms_configured) chans.push('SMS');
+			$('src-dispatch-status').textContent = !disp ? 'CONFIGURABLE'
+				: chans.length ? 'LIVE · ' + chans.join(' + ') : 'NOT CONFIGURED';
+		}
+		if ($('src-dispatch-sub') && disp) {
+			$('src-dispatch-sub').textContent = disp.sms_configured
+				? `Telegram Bot API + real SMS (${disp.sms_provider || 'textbelt'}) — env-var keys`
+				: 'Telegram Bot API + SMS (Textbelt / Twilio / Fast2SMS) — env-var keys';
+		}
 	}
 	function renderForecast(zone) {
 		const cells = document.querySelectorAll('.forecast-values strong');

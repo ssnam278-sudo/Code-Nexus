@@ -1,8 +1,36 @@
-# Real alert dispatch via Telegram (free, no card)
+# Real alert dispatch — Telegram and/or phone SMS
 
 Code Nexus sends a real message when a zone first crosses into **High** or
-**Critical**. The bot token lives only in an environment variable on the host
-(Vercel / Render) — never in this repo.
+**Critical** (and from the "Send test alert" button / `POST /api/alerts/dispatch-test`).
+Two channels, either or both, all opt-in via environment variables — the tokens
+live only in the host's env settings (Vercel / Render), never in this repo.
+
+| Channel | Env vars | Cost |
+| --- | --- | --- |
+| **Telegram** | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | free |
+| **SMS · Textbelt** (default) | `SMS_TO` (`+91…`), optional `TEXTBELT_KEY` | shared key = **1 SMS/day free, no signup**; paid key for more |
+| **SMS · Twilio** | `SMS_PROVIDER=twilio`, `SMS_TO`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | trial credit (needs card) |
+| **SMS · Fast2SMS** (India) | `SMS_PROVIDER=fast2sms`, `SMS_TO`, `FAST2SMS_KEY` | pay-as-you-go; DLT for bulk |
+
+`GET /api/health` → `alert_dispatch.telegram_configured` / `sms_configured` /
+`sms_provider`. The Live forecast tab shows which channels are live.
+
+---
+
+## SMS in 30 seconds (Textbelt, no account)
+
+1. Set one env var on the deploy: `SMS_TO=+919876543210` (your number, E.164).
+2. Redeploy. That's it — `SMS_PROVIDER` defaults to `textbelt` and the shared
+   free key sends **1 SMS/day**. `POST /api/alerts/dispatch-test` → a real text
+   lands on the phone.
+3. For unlimited, buy a Textbelt key (~$0.01/SMS, no subscription) and set
+   `TEXTBELT_KEY=…`.
+
+Multiple recipients: `SMS_TO="+9198…,+9197…"`.
+
+---
+
+## Telegram setup
 
 ## 1. Create the bot (2 minutes)
 
@@ -88,6 +116,12 @@ Risk score: 50/100 (Advisory)
 Coordinates: 27.5861, 91.8594
 Action: Monitor.
 2026-08-29 22:15 IST
+```
+
+**SMS form** (short, single message):
+
+```
+TEST Code Nexus ALERT: Critical landslide risk - Tawang Corridor. Score 82/100. Critical projected in ~5 h. Verify now; move exposed residents. 2026-08-29 22:15 IST
 ```
 
 Timestamps are India Standard Time via `zoneinfo` (`ZoneInfo("Asia/Kolkata")`),

@@ -69,10 +69,15 @@
     fetch(API + '/api/health').then(function (r) { return r.json(); }).then(function (h) {
       var d = (h && h.alert_dispatch) || {};
       var tg = !!d.telegram_configured;
-      box.innerHTML = 'Telegram alert dispatch: <b>' + (tg ? 'configured' : 'not configured') + '</b>' +
-        (tg
+      var sms = !!d.sms_configured;
+      var chans = [];
+      if (tg) chans.push('Telegram');
+      if (sms) chans.push('SMS (' + (d.sms_provider || 'textbelt') + ')');
+      box.innerHTML = 'Alert dispatch: <b>' +
+        (chans.length ? chans.join(' + ') : 'not configured') + '</b>' +
+        (chans.length
           ? ' <button id="live-test-alert" class="ack-btn">Send test alert</button>'
-          : ' &mdash; set <code>TELEGRAM_BOT_TOKEN</code> + <code>TELEGRAM_CHAT_ID</code> (see TELEGRAM_SETUP.md)');
+          : ' &mdash; set <code>TELEGRAM_BOT_TOKEN</code>+<code>TELEGRAM_CHAT_ID</code> or <code>SMS_TO</code> (see ALERTS_SETUP.md)');
       var btn = document.getElementById('live-test-alert');
       if (btn) btn.addEventListener('click', function () {
         btn.disabled = true; btn.textContent = 'Sending…';
@@ -80,9 +85,12 @@
         fetch(API + '/api/alerts/dispatch-test' + (zid ? '?zone_id=' + encodeURIComponent(zid) : ''), { method: 'POST' })
           .then(function (r) { return r.json(); })
           .then(function (res) {
-            btn.textContent = res.telegram === 'sent'
-              ? 'Sent ✓ ' + (res.zone || '') + ' (' + res.risk_score + ')'
-              : (res.telegram || 'failed');
+            var ok = [];
+            if (res.telegram === 'sent') ok.push('Telegram');
+            if (res.sms === 'sent') ok.push('SMS');
+            btn.textContent = ok.length
+              ? 'Sent ✓ ' + ok.join('+') + ' · ' + (res.zone || '') + ' (' + res.risk_score + ')'
+              : ('failed: tg ' + res.telegram + ', sms ' + res.sms);
           })
           .catch(function () { btn.textContent = 'failed'; });
       });

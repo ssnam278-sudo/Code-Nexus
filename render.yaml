@@ -17,11 +17,16 @@ services:
         value: "1"
       - key: CODENEXUS_LIVE_INGEST_SECONDS
         value: "900"
-      # Real alert dispatch (see TELEGRAM_SETUP.md). Set these in the Render
-      # dashboard (Environment tab) so the token stays out of the repo.
+      # Real alert dispatch (see ALERTS_SETUP.md). Set these in the Render
+      # dashboard (Environment tab) so secrets stay out of the repo.
       # - key: TELEGRAM_BOT_TOKEN
       #   sync: false
       # - key: TELEGRAM_CHAT_ID
+      #   sync: false
+      # Phone SMS — SMS_TO alone works with the free Textbelt shared key (1/day).
+      # - key: SMS_TO
+      #   sync: false
+      # - key: TEXTBELT_KEY          # optional: your own key for unlimited sends
       #   sync: false
       # optional: paste a Slack/Discord/other JSON webhook instead of / as well
       # - key: ALERT_WEBHOOK_URL
