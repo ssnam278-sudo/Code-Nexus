@@ -89,14 +89,15 @@ Base 72, clamped to 40–97.
 
 ## Calibration & validation (prototype)
 
-Constants were hand-tuned against a **3-case mini-inventory** with real ERA5
-rainfall (`python -m backend.replay`):
+Constants were hand-tuned against a **4-case mini-inventory** (3 real failures + 1
+control) with real ERA5 rainfall (`python -m backend.replay`):
 
 | Case | Real outcome | Model |
 | --- | --- | --- |
-| East Khasi Hills, Meghalaya — 14–17 Jun 2022 | Fatal landslides, road/rail cut | **High 63 h** before, **Critical 26 h** before |
+| East Khasi Hills (Sohra), Meghalaya — 14–17 Jun 2022 | Fatal landslides, road/rail cut | **High 63 h** before, **Critical 26 h** before |
 | NH-10 Rangpo–Singtam, Sikkim — 19 Jun 2023 | NH-10 closed for days | **High 60 h** before |
-| Sohra, Jun 2019 — ordinary wet week (control) | No failure | Peak "Advisory"; **no alert** |
+| Itanagar–Naharlagun, Arunachal Pradesh — 14–17 Jun 2022 | Fatal landslides, NH-415 blocked | **High 49 h** before |
+| Sohra, Jun 2019 — ordinary wet week (control) | No failure | Peak 43 ("Advisory"); **no alert** |
 
 This is a **sanity check, not a validation**. Before operational use the ID
 constants and weights must be fitted on the full GSI / NASA landslide inventory

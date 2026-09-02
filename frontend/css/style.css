@@ -62,6 +62,7 @@
 .source-row.planned { opacity:.72; }
 .source-row.planned em { color:#8a7a52; border:1px solid #ddceac; background:#fbf4e2; padding:2px 6px; font:600 8.5px 'Barlow Condensed'; letter-spacing:.8px; }
 .source-row.planned .dot { background:#c3b489; box-shadow:none; }
+.alert-i18n { margin:7px 0 0; padding:9px 11px; border-radius:5px; border-left:3px solid var(--orange,#c87422); background:#fff8ea; color:#4a3d24; font:11px/1.55 'DM Sans',sans-serif; white-space:pre-wrap; }
 .map-time-control { display:flex; align-items:center; gap:6px; margin-left:10px; color:#65797d; font:600 9px 'Barlow Condensed'; letter-spacing:.8px; white-space:nowrap; }
 .map-time-control select { padding:6px; border:1px solid #d5e3e1; border-radius:4px; color:#45636a; background:#fff; font-size:10px; }
 .risk-pulse { animation:marker-pulse 1.8s ease-in-out infinite; }
@@ -121,6 +122,9 @@
 .src-tag.live { color:#12656e; background:#dcefee; border:1px solid #b7d8d6; }
 .src-tag.sim { color:#7c8f92; background:#eef1f1; border:1px solid #dbe3e3; }
 .rb-formula { margin:2px 0 9px; padding:6px 8px; border-radius:3px; background:#f3f8f7; border:1px solid #dfeceb; color:#3c5c63; font:11px/1.4 'DM Sans',sans-serif; }
+.rb-engine { margin:0 0 7px; color:#7c8d91; font:9.5px/1.45 'DM Sans',sans-serif; }
+.rb-engine b { color:#c87422; }
+.rb-engine code { background:#eef1f1; padding:0 3px; border-radius:2px; font-size:9px; }
 .rb-cols { display:flex; justify-content:space-between; margin:0 0 4px; color:#93a5a8; font:600 8.5px 'Barlow Condensed'; letter-spacing:.8px; }
 .rb-input { grid-column:1 / -1; margin-top:3px; color:#8a9a9d; font-size:9px; }
 .rb-sum { margin:8px 0 2px; color:#2f5960; font:600 10.5px 'Barlow Condensed'; letter-spacing:.4px; }

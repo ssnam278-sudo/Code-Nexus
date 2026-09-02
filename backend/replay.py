@@ -78,6 +78,23 @@ EVENTS: dict[str, Event] = {
         slope=74, susceptibility=88, history=84,
         source="Sikkim SDMA / BRO situation notes, Jun 2023",
     ),
+    "arunachal-itanagar-2022": Event(
+        id="arunachal-itanagar-2022",
+        name="Itanagar - Naharlagun, Arunachal Pradesh",
+        description=(
+            "Prolonged monsoon rain over 14-17 Jun 2022 saturated the hill slopes "
+            "around the Arunachal capital; multiple landslides killed several "
+            "people, blocked NH-415 and the Hollongi road, and damaged homes "
+            "across Itanagar and Naharlagun."
+        ),
+        latitude=27.10, longitude=93.62,
+        failure_utc="2022-06-17T00:00:00Z",
+        lookback_days=22,
+        # steep, heavily built-up cut slopes on weathered gneiss/schist around
+        # the capital; a recurring monsoon landslide record on the town roads.
+        slope=64, susceptibility=74, history=55,
+        source="Arunachal SDMA / district reports + IMD, Jun 2022",
+    ),
     "control-meghalaya-2019": Event(
         id="control-meghalaya-2019",
         name="Sohra - ordinary monsoon week (control)",

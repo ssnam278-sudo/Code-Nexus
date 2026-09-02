@@ -78,15 +78,18 @@
     if (!box) return;
     box.innerHTML = '';
     events.forEach(function (ev) {
-      var b = el('button', ev.id === current ? 'active' : '', ev.name + (ev.is_control ? '  (control)' : ''));
+      // the event name already carries "(control)" where relevant — don't append it again
+      var label = ev.name;
+      if (ev.is_control && !/\(control\)/i.test(label)) label += ' (control)';
+      var b = el('button', ev.id === current ? 'active' : '', label);
       b.addEventListener('click', function () { current = ev.id; renderPicker(); renderEvent(ev.id); });
       box.appendChild(b);
     });
   }
 
+  // hours everywhere, to match the Situation Room banner and Validation page ("63 h")
   function fmtLead(h) {
     if (h == null) return null;
-    if (h >= 48) return (h / 24).toFixed(1).replace(/\.0$/, '') + ' days';
     return Math.round(h) + ' h';
   }
 

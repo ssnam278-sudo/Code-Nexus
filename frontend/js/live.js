@@ -39,6 +39,8 @@
       'hazard model every 15 min. Lead time is when the <em>forecast</em> first crosses a level.</p></div>' +
       '<div class="live-status" id="live-status">Loading&hellip;</div>' +
       '<div class="live-dispatch" id="live-dispatch">Alert dispatch: checking&hellip;</div>' +
+      '<details class="live-cap" id="live-cap"><summary>CAP 1.2 alert output (OASIS standard · SACHET-compatible)</summary>' +
+      '<div class="live-cap-body" id="live-cap-body">Loading CAP output&hellip;</div></details>' +
       '<div id="live-list"></div>';
     main.appendChild(v);
 
@@ -56,9 +58,20 @@
         '.live-lead{font-size:12px;color:#c0562b;font-weight:600}' +
         '.live-spark{grid-column:1/-1;width:100%;height:44px}' +
         '.live-hz{display:flex;gap:10px;font-size:10.5px;color:#6b7c81;margin-top:2px}' +
-        '.live-dispatch{font-size:11px;color:#5f7379;margin:-4px 0 14px;padding:8px 10px;border:1px solid var(--line,#d7e2e2);border-radius:6px;background:#fbfdfd}' +
+        '.live-dispatch{font-size:11px;color:#5f7379;margin:-4px 0 10px;padding:8px 10px;border:1px solid var(--line,#d7e2e2);border-radius:6px;background:#fbfdfd}' +
         '.live-dispatch b{color:#12525b}' +
-        '.live-dispatch button{margin-left:8px}';
+        '.live-dispatch button{margin-left:8px}' +
+        '.live-cap{margin:0 0 14px;border:1px solid var(--line,#d7e2e2);border-radius:6px;background:#fbfdfd;overflow:hidden}' +
+        '.live-cap>summary{cursor:pointer;list-style:none;padding:8px 10px;font:600 10px "Barlow Condensed",sans-serif;letter-spacing:.8px;color:#12525b;background:#f2f8f7}' +
+        '.live-cap>summary::-webkit-details-marker{display:none}' +
+        '.live-cap>summary::before{content:"▸ ";color:#c87422}' +
+        '.live-cap[open]>summary::before{content:"▾ "}' +
+        '.live-cap-body{padding:10px}' +
+        '.live-cap-body .cap-tabs{display:flex;gap:6px;margin-bottom:8px}' +
+        '.live-cap-body .cap-tabs button{padding:3px 9px;border:1px solid #d5e3e1;border-radius:4px;background:#fff;color:#45636a;font:11px "DM Sans",sans-serif;cursor:pointer}' +
+        '.live-cap-body .cap-tabs button.on{border-color:var(--teal,#167c87);background:#eef7f6;color:#12525b;font-weight:600}' +
+        '.live-cap-body pre{margin:0;max-height:340px;overflow:auto;padding:11px 13px;border-radius:5px;background:#102229;color:#cfe3e2;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre}' +
+        '.live-cap-body .cap-note{margin:7px 0 0;color:#82929a;font-size:10px}';
       document.head.appendChild(s);
     }
   }
@@ -91,10 +104,46 @@
             btn.textContent = ok.length
               ? 'Sent ✓ ' + ok.join('+') + ' · ' + (res.zone || '') + ' (' + res.risk_score + ')'
               : ('failed: tg ' + res.telegram + ', sms ' + res.sms);
+            // reveal the exact CAP 1.2 message that would go out
+            var det = document.getElementById('live-cap');
+            if (det) { det.open = true; showCap(res.zone || zid); }
           })
           .catch(function () { btn.textContent = 'failed'; });
       });
     }).catch(function () { box.textContent = 'Alert dispatch status needs the backend API.'; });
+  }
+
+  var _capLoadedFor = null;
+  function showCap(zid) {
+    var body = document.getElementById('live-cap-body');
+    if (!body) return;
+    var zone = zid || (window.AppState && window.AppState.selectedZoneId) || '';
+    if (_capLoadedFor === zone && body.querySelector('pre')) return;   // cached
+    _capLoadedFor = zone;
+    body.textContent = 'Loading CAP output…';
+    var q = zone ? '?zone_id=' + encodeURIComponent(zone) : '';
+    Promise.all([
+      fetch(API + '/api/cap' + q).then(function (r) { return r.json(); }),
+      fetch(API + '/api/cap' + (q ? q + '&' : '?') + 'format=xml').then(function (r) { return r.text(); })
+    ]).then(function (res) {
+      var jsonStr = JSON.stringify(res[0], null, 2);
+      var xmlStr = res[1];
+      body.innerHTML =
+        '<div class="cap-tabs"><button class="on" data-cap="xml">CAP XML</button><button data-cap="json">JSON</button></div>' +
+        '<pre id="live-cap-pre"></pre>' +
+        '<p class="cap-note">Real output from <code>backend/cap.py</code> for ' +
+        ((res[0].info && res[0].info.area && res[0].info.area.areaDesc) || zone) +
+        '. <code>status=Exercise</code>, unsigned — a registered SACHET sender id + XML signature are required before public dissemination.</p>';
+      var pre = document.getElementById('live-cap-pre');
+      pre.textContent = xmlStr;
+      body.querySelectorAll('.cap-tabs button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          body.querySelectorAll('.cap-tabs button').forEach(function (x) { x.classList.remove('on'); });
+          b.classList.add('on');
+          pre.textContent = b.dataset.cap === 'json' ? jsonStr : xmlStr;
+        });
+      });
+    }).catch(function () { body.textContent = 'CAP output needs the backend API.'; });
   }
 
   function spark(traj, nowIdx) {
@@ -114,9 +163,15 @@
     var st = document.getElementById('live-status');
     if (st) {
       var li = data.last_ingest;
-      st.innerHTML = 'Source <b>Open-Meteo</b> &middot; last pull <b>' + ago(li && li.ran_at) + '</b> &middot; ' +
-        (data.warning_count ? '<b style="color:#c0562b">' + data.warning_count + ' zone(s) in or heading to warning</b>'
-          : 'no zones in warning');
+      var scored = (data.zones || []).filter(function (z) { return z.now; });
+      var warn = scored.filter(function (z) { return z.now.risk_level === 'High' || z.now.risk_level === 'Critical'; }).length;
+      var advisory = scored.filter(function (z) { return z.now.risk_level === 'Advisory'; }).length;
+      var summary = warn
+        ? '<b style="color:#c0562b">' + warn + ' zone(s) in warning (High+)</b>'
+        : advisory
+          ? '<b style="color:#b57a18">' + advisory + ' zone(s) at Advisory</b> &middot; none in warning'
+          : 'all zones normal';
+      st.innerHTML = 'Source <b>Open-Meteo</b> &middot; last pull <b>' + ago(li && li.ran_at) + '</b> &middot; ' + summary;
     }
     var list = document.getElementById('live-list');
     if (!list) return;
@@ -169,6 +224,8 @@
   function boot() {
     inject();
     dispatchStatus();
+    var cap = document.getElementById('live-cap');
+    if (cap) cap.addEventListener('toggle', function () { if (cap.open) showCap(); });
     if (typeof window.switchView === 'function' && !window.switchView.__liveWrapped) {
       var orig = window.switchView;
       window.switchView = function (v) {

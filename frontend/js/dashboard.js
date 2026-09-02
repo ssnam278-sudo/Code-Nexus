@@ -200,6 +200,7 @@ const Dashboard = (() => {
 			const total = cf.reduce((a, f) => a + num(f.contribution), 0);
 			const formula = zone.formula || 'risk = Σ (weightᵢ × inputᵢ),  inputᵢ normalised 0–100';
 			el.innerHTML = `<p class="rb-head">RISK SCORE FORMULA <b>${Math.round(num(zone.score))} / 100</b></p>`
+				+ `<p class="rb-engine">Live engine: <b>4-factor weighted model</b> (<code>risk_engine.py</code>). The physical rainfall-trigger model (Caine / Mora-Vahrson) drives Event Replay &amp; the Live Forecast trajectory only.</p>`
 				+ `<p class="rb-formula">${formula}</p>`
 				+ `<p class="rb-cols"><span>factor</span><span>weight × input = pts</span></p>`
 				+ rows

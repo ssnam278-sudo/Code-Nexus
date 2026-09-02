@@ -35,19 +35,26 @@ This is a real-time transport and ingestion foundation, not a live environmental
 - Local field-report submission and verification log
 - Data-source register showing which inputs are simulated or prepared
 
-### Python risk engine
+### Python risk engine — the number on the dashboard
 
-The Python engine calculates a bounded score from seven inputs:
+`backend/risk_engine.py` `calculate_risk()` is the **single live engine**. The
+Situation Room, Zone Intelligence, Alerts and Live Forecast "now" value all
+display the score it produces (served via `/api/zones` and `/api/risk`); the
+offline browser build uses a byte-for-byte JS port of the same math.
 
-| Input | Weight |
-| --- | ---: |
-| Current rainfall | 16% |
-| Accumulated rainfall | 12% |
-| Soil moisture | 20% |
-| Slope | 16% |
-| Terrain susceptibility | 16% |
-| Historical vulnerability | 12% |
-| Exposure | 8% |
+It is a transparent four-factor weighted sum, each term normalised to 0–100:
+
+    risk = 0.35·rainfall_pressure     (current mm/hr + 24 h accumulation)
+         + 0.25·soil_saturation       (measured soil moisture %)
+         + 0.25·terrain_susceptibility (½ slope + ½ susceptibility index)
+         + 0.15·historical_susceptibility (landslide-inventory density)
+
+Exposure is **not** in the hazard score — it is consequence, not likelihood, and
+is applied only in the response-priority ranking (`0.65·risk + 0.35·exposure`).
+
+> An earlier revision used a flatter seven-input table (current/accumulated
+> rainfall, soil, slope, susceptibility, history, exposure). Those inputs are now
+> folded into the four factors above.
 
 Scores are classified as:
 
@@ -58,10 +65,12 @@ Scores are classified as:
 | 55-74 | High |
 | 75-100 | Critical |
 
-### Rainfall-triggered hazard model
+### Rainfall-triggered hazard model — Event Replay & Live Forecast only
 
-`backend/rainfall_model.py` is a physically motivated, citable replacement for
-the flat weighted sum:
+`backend/rainfall_model.py` is a physically motivated, citable model used for the
+**Event Replay validation** and the **forward trajectory / lead-time** on the
+Live Forecast page. It is *not* the "current risk" number on the dashboard —
+that is always `risk_engine.py` above.
 
 - **Antecedent Precipitation Index** (decayed running rainfall) &rarr; a 0-1
   wetness / saturation state.
@@ -197,7 +206,7 @@ This training file is synthetic prototype data, not a validated historical disas
 POST /api/ml/compare
 ```
 
-It accepts the same seven numeric zone inputs as the baseline and returns `baseline`, `model`, and `comparison` objects. A disagreement is intentionally surfaced for human review rather than silently overriding the baseline.
+It takes the raw numeric zone inputs (rainfall, accumulated, soil moisture, slope, susceptibility, history, exposure) and returns `baseline`, `model`, and `comparison` objects. A disagreement is intentionally surfaced for human review rather than silently overriding the baseline. The model is trained on the clearly-labelled synthetic prototype dataset — not validated disaster records.
 
 ## Use the risk engine
 
