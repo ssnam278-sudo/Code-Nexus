@@ -70,7 +70,16 @@
         '.live-cap-body .cap-tabs{display:flex;gap:6px;margin-bottom:8px}' +
         '.live-cap-body .cap-tabs button{padding:3px 9px;border:1px solid #d5e3e1;border-radius:4px;background:#fff;color:#45636a;font:11px "DM Sans",sans-serif;cursor:pointer}' +
         '.live-cap-body .cap-tabs button.on{border-color:var(--teal,#167c87);background:#eef7f6;color:#12525b;font-weight:600}' +
-        '.live-cap-body pre{margin:0;max-height:340px;overflow:auto;padding:11px 13px;border-radius:5px;background:#102229;color:#cfe3e2;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre}' +
+        '.live-cap-body pre{margin:0;max-height:380px;overflow-x:hidden;overflow-y:auto;padding:11px 13px;border-radius:5px;background:#102229;color:#9fb6b8;' +
+        'font:11px/1.55 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;tab-size:2}' +
+        '.live-cap-body pre .x-tag{color:#6cc7cf}' +
+        '.live-cap-body pre .x-attr{color:#a9c6c4}' +
+        '.live-cap-body pre .x-val{color:#d79a63}' +
+        '.live-cap-body pre .x-punct{color:#5f7d81}' +
+        '.live-cap-body pre .x-com{color:#5f7d81;font-style:italic}' +
+        '.live-cap-body pre .x-txt{color:#cfe3e2}' +
+        '.live-cap-body pre .j-key{color:#6cc7cf}' +
+        '.live-cap-body pre .j-str,.live-cap-body pre .j-num,.live-cap-body pre .j-lit{color:#d79a63}' +
         '.live-cap-body .cap-note{margin:7px 0 0;color:#82929a;font-size:10px}';
       document.head.appendChild(s);
     }
@@ -113,6 +122,59 @@
     }).catch(function () { box.textContent = 'Alert dispatch status needs the backend API.'; });
   }
 
+  function capEsc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // pretty-print a single-line CAP XML string: one tag per line, nested indent
+  function formatXml(xml) {
+    var s = String(xml).replace(/\r?\n/g, '').replace(/>\s+</g, '><').replace(/></g, '>\n<');
+    var out = [], depth = 0;
+    s.split('\n').forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) return;
+      var isDecl = /^<[?!]/.test(line);
+      var isClose = /^<\//.test(line);
+      var isSelf = /\/>\s*$/.test(line);
+      var oneLine = /^<([\w:.-]+)(\s[^>]*)?>[\s\S]*<\/\1>\s*$/.test(line);
+      if (isClose) depth = Math.max(0, depth - 1);
+      out.push(new Array(depth + 1).join('  ') + line);
+      if (!isDecl && !isClose && !isSelf && !oneLine && /^<[\w:.-]/.test(line)) depth += 1;
+    });
+    return out.join('\n');
+  }
+
+  // lightweight regex highlighter (operates on already-escaped text)
+  function hlXml(xml) {
+    var e = capEsc(formatXml(xml));
+    e = e.replace(/(&lt;[?!][\s\S]*?&gt;)/g, '<span class="x-com">$1</span>');
+    e = e.replace(
+      /(&lt;\/?)([\w:.-]+)((?:\s+[\w:.-]+=&quot;[^&]*&quot;)*)(\s*\/?&gt;)/g,
+      function (m, open, name, attrs, close) {
+        var a = attrs.replace(/([\w:.-]+)=(&quot;[^&]*&quot;)/g,
+          '<span class="x-attr">$1</span>=<span class="x-val">$2</span>');
+        return '<span class="x-punct">' + open + '</span><span class="x-tag">' + name + '</span>'
+          + a + '<span class="x-punct">' + close + '</span>';
+      }
+    );
+    // text nodes: content between a > and a <
+    e = e.replace(/(&gt;)([^&<>\n][^<>\n]*?)(&lt;)/g, '$1<span class="x-txt">$2</span>$3');
+    return e;
+  }
+
+  function hlJson(json) {
+    return capEsc(json).replace(
+      /(&quot;(?:\\.|[^&\\])*&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+      function (m, str, colon, lit, num) {
+        if (str) return colon
+          ? '<span class="j-key">' + str + '</span>' + colon
+          : '<span class="j-str">' + str + '</span>';
+        if (lit) return '<span class="j-lit">' + lit + '</span>';
+        return '<span class="j-num">' + num + '</span>';
+      }
+    );
+  }
+
   var _capLoadedFor = null;
   function showCap(zid) {
     var body = document.getElementById('live-cap-body');
@@ -126,8 +188,8 @@
       fetch(API + '/api/cap' + q).then(function (r) { return r.json(); }),
       fetch(API + '/api/cap' + (q ? q + '&' : '?') + 'format=xml').then(function (r) { return r.text(); })
     ]).then(function (res) {
-      var jsonStr = JSON.stringify(res[0], null, 2);
-      var xmlStr = res[1];
+      var jsonHtml = hlJson(JSON.stringify(res[0], null, 2));
+      var xmlHtml = hlXml(res[1]);
       body.innerHTML =
         '<div class="cap-tabs"><button class="on" data-cap="xml">CAP XML</button><button data-cap="json">JSON</button></div>' +
         '<pre id="live-cap-pre"></pre>' +
@@ -135,12 +197,12 @@
         ((res[0].info && res[0].info.area && res[0].info.area.areaDesc) || zone) +
         '. <code>status=Exercise</code>, unsigned — a registered SACHET sender id + XML signature are required before public dissemination.</p>';
       var pre = document.getElementById('live-cap-pre');
-      pre.textContent = xmlStr;
+      pre.innerHTML = xmlHtml;
       body.querySelectorAll('.cap-tabs button').forEach(function (b) {
         b.addEventListener('click', function () {
           body.querySelectorAll('.cap-tabs button').forEach(function (x) { x.classList.remove('on'); });
           b.classList.add('on');
-          pre.textContent = b.dataset.cap === 'json' ? jsonStr : xmlStr;
+          pre.innerHTML = b.dataset.cap === 'json' ? jsonHtml : xmlHtml;
         });
       });
     }).catch(function () { body.textContent = 'CAP output needs the backend API.'; });
