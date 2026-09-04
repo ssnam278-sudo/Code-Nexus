@@ -107,8 +107,11 @@ const MapView = (() => {
             const win = traj.slice(Math.max(0, idx - 2), idx + 1).map(s => num(s.rain)).filter(Number.isFinite);
             if (win.length) return win.reduce((a, b) => a + b, 0) / win.length;
         }
-        if (hAhead > 0 && Array.isArray(zone.forecastRainfall) && zone.forecastRainfall.length) {
-            return num(zone.forecastRainfall[Math.min(zone.forecastRainfall.length - 1, Math.max(0, hAhead - 1))]);
+        const fc = zone.forecastRainfall;
+        if (hAhead > 0 && Array.isArray(fc) && fc.length) {
+            const idx = Math.min(fc.length - 1, hAhead - 1);
+            const win = fc.slice(Math.max(0, idx - 2), idx + 1).map(num).filter(Number.isFinite);
+            if (win.length) return win.reduce((a, b) => a + b, 0) / win.length;
         }
         return num(zone.rainfall);
     }
@@ -136,17 +139,21 @@ const MapView = (() => {
         if (v >= 30) return '#e07b38';
         if (v >= 15) return '#d9a441';
         if (v >= 5)  return '#4dae8f';
-        return '#5aa9c9';
+        if (v >= 1)  return '#5aa9c9';
+        return '#8fb9c9';
     }
     function drawRainfall(zone, value, frameLabel) {
         value = Math.max(0, num(value));
-        const R = Math.max(650, Math.min(3400, value * 42 + 650));
+        const dry = value < 1;
+        // outer radius 9 km (dry) -> ~40 km (torrential); visible at region zoom
+        const outer = 9000 + Math.min(value, 60) * 520;
         const col = rainRamp(value);
-        const label = `${zone.name}: ${value.toFixed(1)} mm/hr` + (frameLabel && frameLabel !== 'Now' ? ` (${frameLabel})` : '');
-        [[1, 0.06], [0.66, 0.12], [0.4, 0.18], [0.2, 0.30]].forEach((ring, i) => {
+        const tag = (frameLabel && frameLabel !== 'Now' ? ` (${frameLabel})` : '') + (dry ? ' · no rain' : '');
+        const label = `${zone.name}: ${value.toFixed(1)} mm/hr${tag}`;
+        [[1, 0.10], [0.7, 0.16], [0.44, 0.24], [0.22, 0.34]].forEach((ring, i) => {
             const c = L.circle(zone.coordinates, {
-                radius: R * ring[0], stroke: i === 0, color: col, weight: 1, opacity: 0.32,
-                fillColor: col, fillOpacity: ring[1], className: 'rain-field'
+                radius: outer * ring[0], stroke: i === 0, color: col, weight: 1.5, opacity: 0.5,
+                fillColor: col, fillOpacity: ring[1] * (dry ? 0.55 : 1), className: 'rain-field'
             }).addTo(overlayLayer);
             if (i === 0) c.bindTooltip(label, { sticky: true });
         });

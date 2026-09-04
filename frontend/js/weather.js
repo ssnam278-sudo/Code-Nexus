@@ -19,7 +19,7 @@ const WeatherService = (() => {
 			+ '&longitude=' + encodeURIComponent(lng)
 			+ '&current=temperature_2m,rain,relative_humidity_2m,soil_moisture_0_to_7cm'
 			+ '&hourly=rain,soil_moisture_0_to_7cm,temperature_2m'
-			+ '&past_hours=24&forecast_hours=6&timezone=Asia%2FKolkata';
+			+ '&past_hours=24&forecast_hours=48&timezone=Asia%2FKolkata';
 	}
 
 	function parse(json) {
@@ -50,7 +50,7 @@ const WeatherService = (() => {
 			hourlyRainfall: last24Rain,
 			hourlySoilMoisture: soil.slice(from, nowIdx + 1),
 			hourlyTemperature: temp.slice(from, nowIdx + 1),
-			forecastRainfall: rain.slice(nowIdx + 1, nowIdx + 7),   // next 6 h
+			forecastRainfall: rain.slice(nowIdx + 1, nowIdx + 49),   // next 48 h
 			_fullRain: rain,
 			_nowIdx: nowIdx
 		};
