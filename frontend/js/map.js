@@ -38,19 +38,85 @@ const MapView = (() => {
     }
 
     function resize() { if (map) requestAnimationFrame(() => map.invalidateSize({ animate:false })); }
+
+    // --- Rainfall map: a filled radial rain field per zone, coloured on a
+    //     rainfall-intensity ramp (real Open-Meteo mm/hr or 24 h total). ---
+    function rainRamp(v) {
+        if (v >= 50) return '#d34438';
+        if (v >= 30) return '#e07b38';
+        if (v >= 15) return '#d9a441';
+        if (v >= 5)  return '#4dae8f';
+        return '#5aa9c9';
+    }
     function drawRainfall(zone, windowName) {
-        // both driven by real Open-Meteo values on the zone record
         const is24 = windowName === '24h';
         const value = Math.max(0, num(is24 ? zone.accumulated : zone.rainfall));
-        const radius = is24
-            ? Math.max(400, Math.min(3200, value * 7))
-            : Math.max(400, Math.min(2600, value * 34));
-        L.circle(zone.coordinates, { radius, color:'#e07b38', weight:2, dashArray:'6 7', fillColor:'#e07b38', fillOpacity:.11, className:'rainfall-ring' })
-            .bindTooltip(`${zone.name}: ${value.toFixed(1)} ${is24 ? 'mm / 24 h' : 'mm / hr'}`)
-            .addTo(overlayLayer);
+        const R = is24
+            ? Math.max(700, Math.min(4200, value * 9))
+            : Math.max(700, Math.min(3400, value * 42));
+        const col = rainRamp(is24 ? value / 4 : value);
+        const label = `${zone.name}: ${value.toFixed(1)} ${is24 ? 'mm / 24 h' : 'mm / hr'}`;
+        [[1, 0.07], [0.66, 0.12], [0.4, 0.18], [0.2, 0.28]].forEach((ring, i) => {
+            const c = L.circle(zone.coordinates, {
+                radius: R * ring[0], stroke: i === 0, color: col, weight: 1, opacity: 0.35,
+                fillColor: col, fillOpacity: ring[1], className: 'rain-field'
+            }).addTo(overlayLayer);
+            if (i === 0) c.bindTooltip(label, { sticky: true });
+        });
     }
-    function drawExposure(state) { (state.exposure?.features || []).filter(feature => feature.properties?.feature_type === 'infrastructure').forEach(feature => { const [longitude, latitude] = feature.geometry.coordinates; L.circleMarker([latitude, longitude], { radius:7, color:'#f0a33c', fillColor:'#fff4c2', fillOpacity:.95, weight:2 }).bindTooltip(feature.properties.name || 'Exposed asset').addTo(overlayLayer); }); }
-    function drawEvacuationRoutes(zone) { const [latitude, longitude] = zone.coordinates; L.polyline([[latitude - .06, longitude - .08], [latitude - .025, longitude - .025], [latitude, longitude]], { color:'#4b9f91', weight:4, dashArray:'10 8', opacity:.9 }).bindTooltip('Prototype evacuation route').addTo(overlayLayer); }
+
+    // --- Exposure map: a choropleth-style circle per zone sized/coloured by the
+    //     exposure index (+ population when known), with the individual assets
+    //     drawn as diamonds on top. ---
+    function expoRamp(v) {
+        if (v >= 80) return '#c94f43';
+        if (v >= 60) return '#e07b38';
+        if (v >= 40) return '#d9a441';
+        return '#8ab07a';
+    }
+    function drawExposure(state) {
+        (state.zones || [])
+            .filter(z => Array.isArray(z.coordinates) && z.coordinates.length === 2 && z.coordinates.every(Number.isFinite))
+            .forEach(z => {
+                const ex = num(z.exposure);
+                const R = Math.max(1400, Math.min(6500, num(z.population) || ex * 70));
+                const col = expoRamp(ex);
+                const label = `${z.name}: exposure ${Math.round(ex)}/100` + (z.population ? ` · ≈${Number(z.population).toLocaleString()} people` : '');
+                [[1, 0.06], [0.62, 0.11], [0.32, 0.18]].forEach((ring, i) => {
+                    const c = L.circle(z.coordinates, {
+                        radius: R * ring[0], stroke: i === 0, color: col, weight: 1, opacity: 0.3,
+                        fillColor: col, fillOpacity: ring[1], className: 'expo-field'
+                    }).addTo(overlayLayer);
+                    if (i === 0) c.bindTooltip(label, { sticky: true });
+                });
+            });
+        (state.exposure && state.exposure.features || [])
+            .filter(f => f.properties && f.properties.feature_type === 'infrastructure')
+            .forEach(f => {
+                const co = f.geometry.coordinates;
+                L.marker([co[1], co[0]], { icon: L.divIcon({ className: 'expo-asset', html: '◆', iconSize: [16, 16] }) })
+                    .addTo(overlayLayer)
+                    .bindTooltip((f.properties.name || 'Exposed asset') + (f.properties.type ? ' · ' + f.properties.type : ''));
+            });
+    }
+
+    // --- Roads & evacuation: three animated "marching ants" routes radiating
+    //     from the selected zone to assembly points, over the bright road tiles. ---
+    function drawEvacuationRoutes(zone) {
+        const lat = zone.coordinates[0], lng = zone.coordinates[1];
+        const routes = [
+            [[lat, lng], [lat - 0.028, lng - 0.04], [lat - 0.066, lng - 0.088]],
+            [[lat, lng], [lat + 0.022, lng - 0.03], [lat + 0.05, lng - 0.082]],
+            [[lat, lng], [lat - 0.04, lng + 0.028], [lat - 0.078, lng + 0.06]]
+        ];
+        routes.forEach((pts, i) => {
+            L.polyline(pts, { color: '#4db0a6', weight: 4, opacity: 0.95, className: 'evac-flow', lineCap: 'round' })
+                .addTo(overlayLayer)
+                .bindTooltip('Prototype evacuation route ' + (i + 1));
+            L.circleMarker(pts[pts.length - 1], { radius: 5, color: '#2f8b6f', fillColor: '#e2f4ef', fillOpacity: 1, weight: 2 })
+                .addTo(overlayLayer).bindTooltip('Assembly point');
+        });
+    }
 
     function render(state) {
         const selected = state.zones.find(zone => zone.id === state.selectedZoneId) || state.zones[0];
@@ -76,6 +142,7 @@ const MapView = (() => {
     }
 
     function renderLocationSwitcher(state) { const switcher = document.getElementById('map-location-switcher'); if (!switcher) return; switcher.innerHTML = state.zones.map(zone => `<button class="map-place ${zone.id === state.selectedZoneId ? 'active' : ''}" data-map-zone="${zone.id}"><i class="place-dot" style="background:${color(zone)}"></i><span>${zone.name || '—'}</span><b>${Math.round(num(zone.score))}</b></button>`).join(''); switcher.querySelectorAll('[data-map-zone]').forEach(button => button.addEventListener('click', () => selectZone(button.dataset.mapZone))); }
-    function renderMode(mode) { const label = document.getElementById('active-layer'); if (label) label.textContent = `${mode.toUpperCase()} OVERLAY`; if (window.AppState) render(window.AppState); }
+    const MODE_LABELS = { risk: 'RISK OVERLAY', rainfall: 'RAINFALL MAP', terrain: 'TERRAIN BASEMAP', exposure: 'EXPOSURE MAP', roads: 'ROADS & EVACUATION' };
+    function renderMode(mode) { const label = document.getElementById('active-layer'); if (label) label.textContent = MODE_LABELS[mode] || `${mode.toUpperCase()} OVERLAY`; if (window.AppState) render(window.AppState); }
     return { init, render };
 })();
