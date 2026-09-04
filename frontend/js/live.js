@@ -113,9 +113,9 @@
             btn.textContent = ok.length
               ? 'Sent ✓ ' + ok.join('+') + ' · ' + (res.zone || '') + ' (' + res.risk_score + ')'
               : ('failed: tg ' + res.telegram + ', sms ' + res.sms);
-            // reveal the exact CAP 1.2 message that would go out
-            var det = document.getElementById('live-cap');
-            if (det) { det.open = true; showCap(res.zone || zid); }
+            // preload the CAP message so it is ready when the panel is opened,
+            // but leave the panel collapsed — it only expands on click
+            showCap(res.zone || zid);
           })
           .catch(function () { btn.textContent = 'failed'; });
       });
