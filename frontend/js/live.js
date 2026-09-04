@@ -39,7 +39,7 @@
       'hazard model every 15 min. Lead time is when the <em>forecast</em> first crosses a level.</p></div>' +
       '<div class="live-status" id="live-status">Loading&hellip;</div>' +
       '<div class="live-dispatch" id="live-dispatch">Alert dispatch: checking&hellip;</div>' +
-      '<details class="live-cap" id="live-cap"><summary>CAP 1.2 alert output (OASIS standard · SACHET-compatible)</summary>' +
+      '<details class="live-cap" id="live-cap"><summary><span class="cap-chevron" aria-hidden="true">›</span> View CAP 1.2 alert output (technical)</summary>' +
       '<div class="live-cap-body" id="live-cap-body">Loading CAP output&hellip;</div></details>' +
       '<div id="live-list"></div>';
     main.appendChild(v);
@@ -64,8 +64,8 @@
         '.live-cap{margin:0 0 14px;border:1px solid var(--line,#d7e2e2);border-radius:6px;background:#fbfdfd;overflow:hidden}' +
         '.live-cap>summary{cursor:pointer;list-style:none;padding:8px 10px;font:600 10px "Barlow Condensed",sans-serif;letter-spacing:.8px;color:#12525b;background:#f2f8f7}' +
         '.live-cap>summary::-webkit-details-marker{display:none}' +
-        '.live-cap>summary::before{content:"▸ ";color:#c87422}' +
-        '.live-cap[open]>summary::before{content:"▾ "}' +
+        '.live-cap>summary .cap-chevron{display:inline-block;color:#c87422;font-size:13px;transition:transform .15s ease}' +
+        '.live-cap[open]>summary .cap-chevron{transform:rotate(90deg)}' +
         '.live-cap-body{padding:10px}' +
         '.live-cap-body .cap-tabs{display:flex;gap:6px;margin-bottom:8px}' +
         '.live-cap-body .cap-tabs button{padding:3px 9px;border:1px solid #d5e3e1;border-radius:4px;background:#fff;color:#45636a;font:11px "DM Sans",sans-serif;cursor:pointer}' +
