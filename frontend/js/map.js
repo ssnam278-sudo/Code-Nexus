@@ -28,6 +28,11 @@ const MapView = (() => {
         }));
         window.addEventListener('resize', resize);
         document.addEventListener('codenexus:authenticated', resize);
+        // the map container flex-grows to match the incident brief column; keep
+        // Leaflet's internal size in sync as that height settles / changes
+        if (window.ResizeObserver) new ResizeObserver(resize).observe(element);
+        setTimeout(resize, 0);
+        setTimeout(resize, 300);
     }
 
     function paintRainFields(zones) {
