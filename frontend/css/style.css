@@ -73,17 +73,7 @@
 .expo-asset { color:#f0a33c; font:13px/16px 'DM Sans',sans-serif; text-align:center; text-shadow:0 0 4px rgba(240,163,60,.95),0 1px 2px #10232a; }
 .evac-flow { stroke-dasharray:9 10; animation:evac-march .9s linear infinite; filter:drop-shadow(0 0 3px rgba(77,176,166,.55)); }
 @keyframes evac-march { to { stroke-dashoffset:-38; } }
-/* rainfall timeline (weather-radar style) — Rainfall tab only */
-.map-rain-time { display:flex; align-items:center; gap:8px; margin-left:10px; }
-.map-rain-time[hidden] { display:none; }
-.rain-play { width:24px; height:22px; border:1px solid #d5e3e1; border-radius:4px; background:#fff; color:#c0562b; font-size:10px; line-height:1; cursor:pointer; }
-.rain-play.playing { background:#eef7f6; }
-.rain-track { display:flex; flex-direction:column; }
-.rain-track input { width:130px; margin:0; accent-color:#c0562b; }
-.rain-ticks { display:flex; justify-content:space-between; width:130px; font:8px 'Barlow Condensed'; color:#829397; letter-spacing:.4px; }
-.rain-frame { font:600 9px 'Barlow Condensed'; color:#c0562b; letter-spacing:.8px; min-width:34px; }
-@media(max-width:760px) { .comparison-scores { grid-template-columns:1fr; }
-  .map-rain-time { margin:10px 0 0; justify-content:space-between; width:100%; } .rain-track, .rain-track input, .rain-ticks { flex:1; width:auto; } }
+@media(max-width:760px) { .comparison-scores { grid-template-columns:1fr; } }
 .auth-message { max-width:560px; line-height:1.45; }
 @media(max-width:700px) { .auth-card { display:block !important; width:100% !important; grid-template-columns:none !important; }.auth-story { display:none; } }
 /* --- demo hardening: score breakdown, threshold scale, what-changed, field verification --- */

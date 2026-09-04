@@ -94,9 +94,6 @@ class LiveHazardTests(unittest.TestCase):
         self.assertEqual([s["time"] for s in traj], sorted(s["time"] for s in traj))
         self.assertEqual(traj[0]["kind"], "observed")
         self.assertEqual(traj[-1]["kind"], "forecast")
-        # per-hour rainfall is exposed for the Situation Room rainfall timeline
-        self.assertTrue(all(isinstance(s["rain"], (int, float)) for s in traj))
-        self.assertAlmostEqual(traj[-1]["rain"], 2.0, places=3)
 
     def test_no_data_returns_status(self):
         self.assertEqual(zone_live_hazard(self.store, ZONE).get("status"), "no_data")

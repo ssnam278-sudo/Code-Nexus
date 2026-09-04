@@ -7,14 +7,6 @@ const MapView = (() => {
     const layers = {};
     const num = v => Number.isFinite(Number(v)) ? Number(v) : 0;
     const validCoords = z => z && Array.isArray(z.coordinates) && z.coordinates.length === 2 && z.coordinates.every(Number.isFinite);
-
-    // --- Rainfall timeline (weather-radar style) — Rainfall tab only ---
-    const RAIN_FRAMES = [{ label: 'Now', h: 0 }, { label: '+6h', h: 6 }, { label: '+24h', h: 24 }];
-    let rainFrame = 0;
-    let rainPlaying = false;
-    let rainTimer = null;
-    let liveHazard = {};          // zoneId -> { trajectory }
-    let liveHazardAt = 0;
     const color = zone => (zone && zone.level) === 'Critical' ? '#d34438' : (zone && zone.level) === 'High' ? '#d36c36' : (zone && zone.level) === 'Advisory' ? '#d5a03b' : '#4d9d69';
 
     function init(selectCallback) {
@@ -32,108 +24,20 @@ const MapView = (() => {
             document.querySelectorAll('.map-control').forEach(item => item.classList.remove('active'));
             button.classList.add('active');
             activeMode = button.dataset.mapMode;
-            if (activeMode === 'rainfall') { showRainTimeline(); loadLiveHazard(); }
-            else { stopRainAnim(); showRainTimeline(false); }
             renderMode(activeMode);
         }));
-
-        // Rainfall timeline control (radar-style play/pause + Now / +6h / +24h scrubber)
-        const head = element.closest('.map-shell')?.querySelector('.map-head');
-        if (head && !document.getElementById('map-rain-time')) {
-            const bar = document.createElement('div');
-            bar.className = 'map-rain-time';
-            bar.id = 'map-rain-time';
-            bar.hidden = true;
-            bar.innerHTML =
-                '<button id="rain-play" class="rain-play" type="button" aria-label="Play rainfall animation">▶</button>' +
-                '<div class="rain-track"><input id="rain-scrub" type="range" min="0" max="2" step="1" value="0" aria-label="Rainfall time">' +
-                '<div class="rain-ticks"><span>Now</span><span>+6h</span><span>+24h</span></div></div>' +
-                '<span id="rain-frame" class="rain-frame">Now</span>';
-            head.appendChild(bar);
-            bar.querySelector('#rain-play').addEventListener('click', toggleRainAnim);
-            bar.querySelector('#rain-scrub').addEventListener('input', event => {
-                stopRainAnim();
-                rainFrame = Math.max(0, Math.min(2, parseInt(event.target.value, 10) || 0));
-                paintRainFrame();
-            });
-        }
         window.addEventListener('resize', resize);
         document.addEventListener('codenexus:authenticated', resize);
     }
 
-    function showRainTimeline(on = true) {
-        const bar = document.getElementById('map-rain-time');
-        if (bar) bar.hidden = !on;
-    }
-    function loadLiveHazard() {
-        if (Date.now() - liveHazardAt < 60000 && Object.keys(liveHazard).length) return Promise.resolve();
-        return fetch('/api/live/hazard')
-            .then(r => r.json())
-            .then(d => {
-                (d.zones || []).forEach(z => { if (z && z.zone_id) liveHazard[z.zone_id] = { trajectory: z.trajectory || [] }; });
-                liveHazardAt = Date.now();
-                if (activeMode === 'rainfall') paintRainFrame();
-            })
-            .catch(() => { /* fall back to AppState values below */ });
-    }
-    function toggleRainAnim() {
-        rainPlaying ? stopRainAnim() : startRainAnim();
-    }
-    function startRainAnim() {
-        rainPlaying = true;
-        const btn = document.getElementById('rain-play');
-        if (btn) { btn.textContent = '⏸'; btn.classList.add('playing'); }
-        clearInterval(rainTimer);
-        rainTimer = setInterval(() => {
-            rainFrame = (rainFrame + 1) % RAIN_FRAMES.length;
-            paintRainFrame();
-        }, 1500);
-    }
-    function stopRainAnim() {
-        rainPlaying = false;
-        clearInterval(rainTimer);
-        rainTimer = null;
-        const btn = document.getElementById('rain-play');
-        if (btn) { btn.textContent = '▶'; btn.classList.remove('playing'); }
-    }
-    // rainfall (mm/hr) at frame `h` hours ahead, from the Live-Forecast trajectory
-    // (trailing 3 h mean); falls back to the 6 h browser forecast, then the current value.
-    function rainValueForZone(zone, hAhead) {
-        const traj = liveHazard[zone.id] && liveHazard[zone.id].trajectory;
-        if (traj && traj.length) {
-            let nowIdx = 0;
-            for (let i = 0; i < traj.length; i++) if (traj[i].kind === 'observed') nowIdx = i;
-            const idx = Math.min(traj.length - 1, nowIdx + hAhead);
-            const win = traj.slice(Math.max(0, idx - 2), idx + 1).map(s => num(s.rain)).filter(Number.isFinite);
-            if (win.length) return win.reduce((a, b) => a + b, 0) / win.length;
-        }
-        const fc = zone.forecastRainfall;
-        if (hAhead > 0 && Array.isArray(fc) && fc.length) {
-            const idx = Math.min(fc.length - 1, hAhead - 1);
-            const win = fc.slice(Math.max(0, idx - 2), idx + 1).map(num).filter(Number.isFinite);
-            if (win.length) return win.reduce((a, b) => a + b, 0) / win.length;
-        }
-        return num(zone.rainfall);
-    }
     function paintRainFields(zones) {
-        const frame = RAIN_FRAMES[rainFrame];
-        (zones || []).filter(validCoords).forEach(z => drawRainfall(z, rainValueForZone(z, frame.h), frame.label));
-        const lbl = document.getElementById('rain-frame');
-        if (lbl) lbl.textContent = frame.label;
-        const scr = document.getElementById('rain-scrub');
-        if (scr && +scr.value !== rainFrame) scr.value = String(rainFrame);
-    }
-    function paintRainFrame() {
-        if (activeMode !== 'rainfall' || !map || !overlayLayer) return;
-        if (document.querySelector('.view.active') && document.querySelector('.view.active').dataset.section !== 'dashboard') return;
-        overlayLayer.clearLayers();
-        paintRainFields(window.AppState && window.AppState.zones);
+        (zones || []).filter(validCoords).forEach(z => drawRainfall(z, num(z.rainfall)));
     }
 
     function resize() { if (map) requestAnimationFrame(() => map.invalidateSize({ animate:false })); }
 
     // --- Rainfall map: a filled radial rain field per zone, coloured on a
-    //     rainfall-intensity ramp. `value` is mm/hr at the current timeline frame. ---
+    //     rainfall-intensity ramp. `value` is current mm/hr. ---
     function rainRamp(v) {
         if (v >= 50) return '#d34438';
         if (v >= 30) return '#e07b38';
@@ -142,14 +46,13 @@ const MapView = (() => {
         if (v >= 1)  return '#5aa9c9';
         return '#8fb9c9';
     }
-    function drawRainfall(zone, value, frameLabel) {
+    function drawRainfall(zone, value) {
         value = Math.max(0, num(value));
         const dry = value < 1;
         // outer radius 9 km (dry) -> ~40 km (torrential); visible at region zoom
         const outer = 9000 + Math.min(value, 60) * 520;
         const col = rainRamp(value);
-        const tag = (frameLabel && frameLabel !== 'Now' ? ` (${frameLabel})` : '') + (dry ? ' · no rain' : '');
-        const label = `${zone.name}: ${value.toFixed(1)} mm/hr${tag}`;
+        const label = `${zone.name}: ${value.toFixed(1)} mm/hr${dry ? ' · no rain' : ''}`;
         [[1, 0.10], [0.7, 0.16], [0.44, 0.24], [0.22, 0.34]].forEach((ring, i) => {
             const c = L.circle(zone.coordinates, {
                 radius: outer * ring[0], stroke: i === 0, color: col, weight: 1.5, opacity: 0.5,

@@ -74,9 +74,6 @@ def zone_live_hazard(store: LiveStore, zone: Mapping[str, Any]) -> dict[str, Any
             "risk_score": h["risk_score"],
             "risk_level": h["risk_level"],
             "kind": "observed" if idx <= now_idx else "forecast",
-            # per-hour rainfall (mm) — same Open-Meteo series the risk uses;
-            # the Situation Room rainfall-timeline animation reads this.
-            "rain": round(precip[idx], 2),
         })
 
     future = [step for step in trajectory if step["kind"] == "forecast"]
